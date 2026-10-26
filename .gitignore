@@ -1,0 +1,37 @@
+# Benchmark data and run artifacts (~35 GB; never commit)
+data/
+runs/
+output/
+indexes/
+*.sqlite
+*.parquet
+chroma_data/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# LLM response cache, logs
+.cache/
+*.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
