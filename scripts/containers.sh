@@ -8,9 +8,13 @@
 # benchmark/mcp_connection_config.yaml. Prefer `docker compose up -d` when available.
 #
 # Usage: scripts/containers.sh start [1 2 3 4] | stop [..] | status
+#   CONFIGS_DIR=generated/configs scripts/containers.sh start 1
+#     mounts an alternative environment/configs (see scripts/make_cap1_mapping.py)
 set -euo pipefail
 
-UPSTREAM="$(cd "$(dirname "$0")/../third_party/vakra" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+UPSTREAM="$ROOT/third_party/vakra"
+CONFIGS_DIR="$(cd "$ROOT" && realpath "${CONFIGS_DIR:-third_party/vakra/environment/configs}")"
 IMAGE=benchmark_environ
 declare -A NAMES=(
   [1]=capability_1_bi_apis
@@ -30,7 +34,7 @@ case "$cmd" in
       docker rm -f "$name" >/dev/null 2>&1 || true
       args=(-d --name "$name" -e MCP_VERIFY_CHECKSUMS=1
             -v "$UPSTREAM/data/databases:/app/db:ro"
-            -v "$UPSTREAM/environment/configs:/app/environment/configs:ro")
+            -v "$CONFIGS_DIR:/app/environment/configs:ro")
       if [[ "$c" == 4 ]]; then
         mkdir -p "$UPSTREAM/data/indexed_documents" "$UPSTREAM/data/queries"
         args+=(--memory 8g
