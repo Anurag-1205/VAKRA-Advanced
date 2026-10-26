@@ -22,8 +22,11 @@ DEFAULT_MODELS = {"groq": "openai/gpt-oss-120b", "gemini": "gemini-3.8-flash"}
 
 
 def git_sha(path: Path) -> str:
+    """Short HEAD sha, suffixed '-dirty' when tracked files have local changes."""
     out = subprocess.run(["git", "-C", str(path), "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
-    return out.stdout.strip() or "unknown"
+    dirty = subprocess.run(["git", "-C", str(path), "status", "--porcelain", "--untracked-files=no"],
+                           capture_output=True, text=True).stdout.strip()
+    return (out.stdout.strip() or "unknown") + ("-dirty" if dirty else "")
 
 
 def summarize(out_dir: Path) -> dict:
@@ -62,7 +65,8 @@ def main() -> int:
 
     # The backend is part of the run id: results from different agent models are
     # separate experiment series and must never be pooled (SPEC §7.3).
-    run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-v0-{args.agent_backend}-{args.split}"
+    variant = "v0" if args.top_k_tools == 128 else f"v0k{args.top_k_tools}"
+    run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     env = subprocess_env(agent_backend=args.agent_backend)
@@ -70,7 +74,7 @@ def main() -> int:
 
     config = {
         "run_id": run_id,
-        "variant": "V0 upstream LangGraphReActAgent",
+        "variant": "V0 upstream LangGraphReActAgent" + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
         "max_per_domain": args.max_per_domain,
