@@ -1,0 +1,6 @@
+# Version pins for our venv, applied on top of upstream's unpinned requirements:
+#   pip install -c constraints.txt -e "third_party/vakra[init]" -r third_party/vakra/requirements_benchmark.txt
+
+# mcp 2.x renamed Tool.inputSchema -> input_schema; upstream evaluator/evaluator.py
+# (IBM/vakra@00dc68f) still reads tool.inputSchema and fails to connect under 2.x.
+mcp>=1.0.0,<2
