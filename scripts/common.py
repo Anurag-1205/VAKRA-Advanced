@@ -16,6 +16,14 @@ RUNS_DIR = REPO_ROOT / "runs"
 
 GROQ_OPENAI_BASE_URL = "https://api.groq.com/openai/v1"
 
+# Agent backends reachable through upstream create_llm(provider="openai"), i.e.
+# langchain ChatOpenAI pointed at an OpenAI-compatible endpoint. The judge is not
+# configurable here: it always uses upstream's Groq judge (openai/gpt-oss-120b).
+AGENT_BACKENDS = {
+    "groq": {"key_var": "API_KEY", "base_url": GROQ_OPENAI_BASE_URL},
+    "gemini": {"key_var": "GEMINI_API_KEY", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/"},
+}
+
 # capability id -> (data dir name, evaluator registry name); names verified in
 # upstream benchmark/runner_helpers.py and evaluator/evaluator.py.
 CAPABILITIES = {
@@ -39,11 +47,12 @@ def load_dotenv(path: Path = REPO_ROOT / ".env") -> dict:
     return env
 
 
-def subprocess_env(extra: dict | None = None) -> dict:
+def subprocess_env(extra: dict | None = None, agent_backend: str = "groq") -> dict:
     """Environment for upstream subprocesses.
 
     Agent: upstream create_llm(provider="openai") builds langchain ChatOpenAI,
-    which reads OPENAI_API_KEY and OPENAI_BASE_URL; we point both at Groq.
+    which reads OPENAI_API_KEY and OPENAI_BASE_URL; we point both at the chosen
+    backend in AGENT_BACKENDS.
     Judge: upstream evaluator/judge.py ChatGroq reads API_KEY and is selected
     with JUDGE_BACKEND=groq (default backend is IBM-internal RITS).
     Values only live in the child process env; nothing is written to disk.
@@ -52,10 +61,12 @@ def subprocess_env(extra: dict | None = None) -> dict:
     dot = load_dotenv()
     for key, value in dot.items():
         env.setdefault(key, value)
-    if not env.get("API_KEY"):
-        raise SystemExit("API_KEY missing: add it to .env (see .env.example)")
-    env["OPENAI_API_KEY"] = env["API_KEY"]
-    env["OPENAI_BASE_URL"] = env.get("OPENAI_BASE_URL") or GROQ_OPENAI_BASE_URL
+    backend = AGENT_BACKENDS[agent_backend]
+    for var in {"API_KEY", backend["key_var"]}:
+        if not env.get(var):
+            raise SystemExit(f"{var} missing: add it to .env (see .env.example)")
+    env["OPENAI_API_KEY"] = env[backend["key_var"]]
+    env["OPENAI_BASE_URL"] = backend["base_url"]
     env["JUDGE_BACKEND"] = env.get("JUDGE_BACKEND") or "groq"
     env["PYTHONPATH"] = os.pathsep.join(p for p in (str(UPSTREAM), env.get("PYTHONPATH")) if p)
     env.update(extra or {})

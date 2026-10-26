@@ -276,8 +276,16 @@ The main failure is **wrong argument or column names**; with SEL tools, it is al
 
 ## 6. LLM usage
 
-- **Provider-agnostic** through one config key. Candidates: an open-weights model via
-  Groq / Ollama / vLLM, or an API model. The choice is pending ([PLAN.md §6](PLAN.md#6-open-decisions)).
+- **Provider-agnostic** through one switch (`--agent-backend`). Both backends below go through
+  upstream `create_llm(provider="openai")`, i.e. LangChain `ChatOpenAI` with `OPENAI_BASE_URL`,
+  so no upstream code changes. Verified 2026-10-27:
+
+  | Backend | Model | Endpoint | Status |
+  |---|---|---|---|
+  | `groq` (primary series) | `openai/gpt-oss-120b` | `https://api.groq.com/openai/v1` | Tool calling OK. Free tier: 1,000 req/day, 8,000 tokens/min (from response headers) |
+  | `gemini` (secondary series) | `gemini-3.8-flash` | `https://generativelanguage.googleapis.com/v1beta/openai/` | Tool calling OK. Free-tier limits not exposed in headers; check AI Studio |
+
+  The choice is tracked in [PLAN.md §6](PLAN.md#6-open-decisions).
 - Default `temperature = 0`. Use the same model for all variants in a comparison.
 - Separate the *agent* LLM from the *judge* LLM (fixed: `gpt-oss-120b`), so that our metric is
   never self-graded.
@@ -324,8 +332,16 @@ The main failure is **wrong argument or column names**; with SEL tools, it is al
 
 ### 7.3 Experiment rules
 
-- Every run is defined by a YAML config and identified by `run_id = <date>-<short-hash>`.
-- Every run logs the config, our git SHA, the upstream SHA and the model name.
+- Every run is identified by `run_id = <date>-<variant>-<agent backend>-<split>`, and its
+  `config.json` logs the config, our git SHA, the upstream SHA, the agent backend and model.
+- **Model identity is part of the experiment.**
+  - The judge is fixed to the official setup: upstream `ChatGroq`, `openai/gpt-oss-120b`,
+    temperature 0. It is never swapped.
+  - Each (agent backend, agent model) pair is a **separate experiment series**. Variants are
+    compared only within one series; scores from different series are never pooled or
+    averaged. A model change gets its own V0 before any variant is compared against it.
+  - Any change to the model, provider, sampling settings or upstream SHA is recorded in the run
+    config and in the results table.
 - Each comparison changes **one factor** at a time. Report the mean on `dev-heldout`.
   Use a paired bootstrap 95% CI when the difference is < 3 points.
 
