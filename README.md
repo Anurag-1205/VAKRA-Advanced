@@ -47,55 +47,61 @@ Scoring replays our tool calls against the live APIs. The full scoring rules are
 
 ## Setup
 
-> These are the official environment steps as of the upstream commit we have read
-> (`IBM/vakra@00dc68f`, 2026-09-22). Our own agent code is not written yet; this section will
-> grow as `src/` lands.
+Verified on Ubuntu 24.04 (7 GiB RAM, Docker 29, Python 3.12) against `IBM/vakra@00dc68f`.
+Upstream code is never modified; our `scripts/` wrap it.
 
 **Requirements:**
 
-- Linux or macOS
-- Python ≥ 3.11
-- Docker with the Compose plugin, with **≥ 8 GB RAM** given to the container runtime
-  (the Capability 4 ChromaDB service runs out of memory at 2 GB)
-- **~35 GB free disk**
-- `make`
-- A Hugging Face token
-- An LLM provider (OpenAI / Anthropic / LiteLLM / watsonx key, or a local Ollama)
+- Linux, Python ≥ 3.11, Docker
+- **RAM:** ≥ 8 GB free for Docker is needed only for Capability 4 (ChromaDB)
+- **Disk:** ~15 GB for this subset setup (vs. ~35 GB for upstream's full download)
+- **API keys** in `.env` (copy [`.env.example`](.env.example)):
+  - `API_KEY`: a Groq key. It serves both the official judge and the default agent.
+  - `GEMINI_API_KEY`: optional, for the second agent backend.
 
 ```bash
-# 1. Clone this repo together with the upstream benchmark, which is a git submodule
-#    pinned to a commit under third_party/vakra
+# 1. Clone with the upstream benchmark (git submodule pinned under third_party/vakra)
 git clone --recurse-submodules https://github.com/Anurag-1205/VAKRA-Advanced.git
-cd VAKRA-Advanced/third_party/vakra
-#    (already cloned without it? run: git submodule update --init)
+cd VAKRA-Advanced          # (already cloned? git submodule update --init)
+cp .env.example .env       # then put your keys in .env
 
-# 2. Python environment
+# 2. Python env (CPU-only torch saves ~3 GB)
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[init]"
-pip install -r requirements_benchmark.txt
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -e "third_party/vakra[init]" -r third_party/vakra/requirements_benchmark.txt
 
-# 3. Data (~30–35 GB). Uses HF_TOKEN. Downloads the gated test split if you have access,
-#    otherwise the public train split.
-export HF_TOKEN=hf_...
-make download
+# 3. Check the LLM key: model list, one tool call, rate-limit headers. Prints no secrets.
+python scripts/check_llm.py
 
-# 4. Build the image and start the 4 capability containers.
-#    setup.md mentions `make pull`, but the Makefile has no such target, so build locally.
-make build
-docker compose up -d
-sleep 60 && make validate     # checks the live MCP connections
+# 4. Data: public train split + databases for the held-out domains (~6 GB).
+#    Anonymous, so it never touches the gated test repo. See splits/README.md.
+python scripts/download_data.py --train
+python scripts/download_data.py --domains authors cars european_football_1 hockey \
+    ice_hockey_draft menu sales_in_weather student_loan world
 
-# 5. Smoke test with the upstream ReAct baseline
-python benchmark_runner.py --capability_id 2 --domain hockey \
-  --max-samples-per-domain 5 --provider ollama --model llama3.1:8b
+# 5. Image + containers
+scripts/build_image.sh           # = upstream `make build`, with CPU-only torch
+scripts/containers.sh start 1 2 3   # or `docker compose up -d` if you have Compose v2
+scripts/containers.sh status
+
+# 6. V0 baseline on a split, then official scoring (judge: Groq gpt-oss-120b)
+python scripts/run_baseline.py --split smoke --caps 1 2 3
+python scripts/evaluate.py --run-id <run_id printed above>
 ```
 
-**Optional:** to browse the tool catalogs, run
-`cd tools_explorer && uvicorn tools_explorer.app:app --port 7861`.
+Notes:
 
-**Local evaluation:** the official evaluator's LLM judges use `openai/gpt-oss-120b` through an
-OpenAI-compatible endpoint (Groq by default). Set `API_KEY` before running
-`python evaluator/evaluator.py ...`. See [SPEC.md §7](SPEC.md#7-evaluation-protocol).
+- **Why not upstream `make download`?** It tries the gated test repo whenever *any* Hugging
+  Face token is found, including a cached CLI login, and then skips the train split.
+- **Compose:** `scripts/containers.sh` mirrors `docker-compose.yml` with plain `docker run`,
+  because Ubuntu's `docker-compose` v1.29 rejects that file. Prefer
+  `sudo apt install docker-compose-v2`.
+- **Splits:** [`splits/`](splits/) holds committed uuid lists. Rebuild or verify them with
+  `scripts/make_splits.py`.
+- **Runs:** results land in `runs/<run_id>/` (gitignored):
+  - `config.json` (models, SHAs, counts, timings)
+  - `output/` (official submission format)
+  - `eval/` (upstream evaluator reports)
 
 ## Official resources
 
