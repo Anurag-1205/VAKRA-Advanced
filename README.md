@@ -63,10 +63,11 @@ Scoring replays our tool calls against the live APIs. The full scoring rules are
 - An LLM provider (OpenAI / Anthropic / LiteLLM / watsonx key, or a local Ollama)
 
 ```bash
-# 1. Get the upstream benchmark (we keep it unmodified under third_party/)
-git clone https://github.com/IBM/vakra.git third_party/vakra
-cd third_party/vakra
-git checkout 00dc68f        # pin; bump deliberately
+# 1. Clone this repo together with the upstream benchmark, which is a git submodule
+#    pinned to a commit under third_party/vakra
+git clone --recurse-submodules https://github.com/Anurag-1205/VAKRA-Advanced.git
+cd VAKRA-Advanced/third_party/vakra
+#    (already cloned without it? run: git submodule update --init)
 
 # 2. Python environment
 python3 -m venv .venv && source .venv/bin/activate

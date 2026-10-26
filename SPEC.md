@@ -295,7 +295,8 @@ The main failure is **wrong argument or column names**; with SEL tools, it is al
 | `dev-seen` | 15 % of items from train domains, stratified by domain | Fast iteration |
 | `dev-heldout` | All items from ~20 % of train **domains**, per capability | **Primary model-selection metric.** Mimics unseen test domains |
 | `train-rest` | Remainder | Few-shot pool, doc2query expansion, error mining |
-| `test` | Official, gated (registration required) | Final runs only, during the evaluation window |
+| `bench-test` | Public benchmark test set `ibm-research/VAKRA-GatedTest` (HF request + GitHub issue) | Occasional check on test-only domains; never used for few-shot, indexes or tuning |
+| `semeval-eval` | Official SemEval evaluation set (registration form; held-out and newly curated instances) | Final runs only, during the January 2027 evaluation window |
 
 - Splits are produced by `scripts/make_splits.py` with a fixed seed and committed as uuid lists.
 - No information from held-out domains may enter indexes or few-shot pools when scoring
@@ -376,7 +377,8 @@ VAKRA-Advanced/
 - Follow the organizers' rules on permitted resources and submission format. These are to be
   published before the evaluation window, so keep the model and provider swappable.
 - The data license is CC BY-NC-SA 4.0. Do not publish derived indexes without that license.
-- Never train on or tune against the gated test split.
+- Never train on or tune against `bench-test` or `semeval-eval`. Recheck this once the organizers
+  publish their rules on permitted resources.
 
 ---
 

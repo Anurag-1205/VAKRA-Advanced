@@ -40,8 +40,13 @@ Weeks start on Mondays. The course deadlines are not yet in this plan and must b
 
 - [ ] Everyone: join the mailing list.
 - [ ] One person: submit the team registration form <https://forms.gle/2MLpxaU1kcD1SbCm7>.
-- [ ] Request gated test access (GitHub issue template `gated_test_access`).
-- [ ] Request PolicyJudge access (GitHub issue).
+- [ ] Request access to the **public benchmark test set** `ibm-research/VAKRA-GatedTest`. This is
+  *not* the SemEval evaluation data, which comes through the registration form. Two steps:
+  1. Click "request access" on its Hugging Face page.
+  2. Open an issue on IBM/vakra with the template "VAKRA-GatedTest Access Request".
+  This gives us inputs for the test domains that train does not cover.
+- [ ] Request PolicyJudge access: a plain issue on IBM/vakra asking for `policy_judge.py`, for
+  local Cap 4 scoring.
 - [ ] Decide the LLM provider and budget ([§6](#6-open-decisions)); get API keys, including a
   judge endpoint for `gpt-oss-120b`.
 - [ ] **A:** create the git repo; add upstream at `third_party/vakra` pinned to `00dc68f`; run
