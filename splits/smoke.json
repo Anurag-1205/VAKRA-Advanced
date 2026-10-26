@@ -1,0 +1,32 @@
+{
+ "capability_1_bi_apis": [
+  "1f58b1e965af-59781279e0dd",
+  "1f58b1e965af-c8c0ee76f1fe",
+  "1f58b1e965af-f6def2016fab",
+  "840942187214-7f93da5becb3",
+  "840942187214-be3477e58301",
+  "840942187214-c3dc87c6f2c2"
+ ],
+ "capability_2_dashboard_apis": [
+  "1f58b1e965af-08d547c76c8f",
+  "1f58b1e965af-5bff078e7c66",
+  "1f58b1e965af-70e1b2b57783",
+  "840942187214-637346c3cc3e",
+  "840942187214-a9e5d16b580a",
+  "840942187214-ab73becea4a7"
+ ],
+ "capability_3_multihop_reasoning": [
+  "1f58b1e965af-00321eafff86",
+  "1f58b1e965af-591d376c97c6",
+  "1f58b1e965af-663969601a74",
+  "840942187214-79018c165928"
+ ],
+ "capability_4_multiturn": [
+  "1f58b1e965af-23601dbfb6f0",
+  "1f58b1e965af-702c5683d4e2",
+  "1f58b1e965af-d688640b565f",
+  "840942187214-14d4e7daa596",
+  "840942187214-89bd305c80f1",
+  "840942187214-ce0234258c8d"
+ ]
+}
