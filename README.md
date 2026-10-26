@@ -43,7 +43,23 @@ Scoring replays our tool calls against the live APIs. The full scoring rules are
 
 ## Status
 
-**Week 0 (from 2026-10-26):** planning documents only. No code yet.
+**Phase 0 (2026-10-27): environment working for Caps 1–3, baseline blocked by free-tier limits.**
+Details and evidence: [results/phase0.md](results/phase0.md).
+
+- **Working:**
+  - data download (public train split)
+  - committed dev splits
+  - Docker image and Cap 1–3 containers
+  - MCP connections and tool checksums
+  - Groq API and tool calling
+  - V0 baseline runner and official evaluator, end to end
+- **First scores** (smoke split, gpt-oss-120b on Groq, top-k-tools 32): Cap 2 **4/6**,
+  Cap 3 **0/4**.
+- **Blocked:**
+  - Default V0 (top-k 128) can't fit Groq's free tier (8K tokens/min).
+  - Gemini 3.x fails multi-step tool calls through upstream's agent.
+  - Cap 4 needs more RAM than this laptop has.
+  - No dev-heldout baseline yet.
 
 ## Setup
 
@@ -68,7 +84,7 @@ cp .env.example .env       # then put your keys in .env
 # 2. Python env (CPU-only torch saves ~3 GB)
 python3 -m venv .venv && source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install -e "third_party/vakra[init]" -r third_party/vakra/requirements_benchmark.txt
+pip install -c constraints.txt -e "third_party/vakra[init]" -r third_party/vakra/requirements_benchmark.txt
 
 # 3. Check the LLM key: model list, one tool call, rate-limit headers. Prints no secrets.
 python scripts/check_llm.py
@@ -79,13 +95,17 @@ python scripts/download_data.py --train
 python scripts/download_data.py --domains authors cars european_football_1 hockey \
     ice_hockey_draft menu sales_in_weather student_loan world
 
-# 5. Image + containers
-scripts/build_image.sh           # = upstream `make build`, with CPU-only torch
-scripts/containers.sh start 1 2 3   # or `docker compose up -d` if you have Compose v2
+# 5. Image + containers. Cap 1 needs a tool-universe mapping that covers train uuids
+#    (upstream's covers only the gated test split).
+scripts/build_image.sh                       # = upstream `make build`, with CPU-only torch
+(cd scripts && python make_cap1_mapping.py)  # writes generated/configs/ (gitignored)
+CONFIGS_DIR=generated/configs scripts/containers.sh start 1 2 3
 scripts/containers.sh status
+python scripts/inspect_tools.py --cap 2 --domains hockey   # MCP + checksum check, tool sizes
 
-# 6. V0 baseline on a split, then official scoring (judge: Groq gpt-oss-120b)
-python scripts/run_baseline.py --split smoke --caps 1 2 3
+# 6. Baseline on a split, then official scoring (judge: Groq gpt-oss-120b).
+#    On Groq's free tier, default top-k (128) is rejected as too large; 32 fits.
+python scripts/run_baseline.py --split smoke --caps 2 3 --top-k-tools 32
 python scripts/evaluate.py --run-id <run_id printed above>
 ```
 
@@ -93,6 +113,7 @@ Notes:
 
 - **Why not upstream `make download`?** It tries the gated test repo whenever *any* Hugging
   Face token is found, including a cached CLI login, and then skips the train split.
+- **`constraints.txt`** pins `mcp<2`. With mcp 2.x, upstream's evaluator fails to connect.
 - **Compose:** `scripts/containers.sh` mirrors `docker-compose.yml` with plain `docker run`,
   because Ubuntu's `docker-compose` v1.29 rejects that file. Prefer
   `sudo apt install docker-compose-v2`.

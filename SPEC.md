@@ -405,9 +405,16 @@ VAKRA-Advanced/
 2. Cap 1: during replay, does the evaluator re-issue `get_data` itself, or must our trajectory
    include it? Compare the gold `output` sequences (`initialize_active_data`, `$label.data_path$`
    references) with what upstream records.
+   **Answered (2026-10-27):** the evaluator prepends `get_data(tool_universe_id=uuid)` to both
+   trajectories itself and strips `initialize_active_data` from the ground truth
+   (`evaluator.py`, `_prepend_get_data_to_batch`). The server resolves the uuid through
+   `environment/configs/mcp_tool_universe_id_mapping.yaml`, which upstream generates from the
+   gated test split only; train uuids need `scripts/make_cap1_mapping.py`.
 3. Exact string format of tool responses compared by ExactMatchJudge. Does dict key order or
    float formatting ever break matching?
 4. How does the official SemEval ranking weight the capabilities? (Not published yet.)
 5. Can we get PolicyJudge access (GitHub issue) for local Cap 4 scoring?
 6. Exact directory names under `data/train/` after `make download` (the HF card shows
    `capability-X`; the repo uses `capability_N_<name>`).
+   **Answered (2026-10-27):** `train/capability_N_<name>/{input,output}/<domain>.json`,
+   e.g. `capability_2_dashboard_apis`, matching the runner and evaluator.

@@ -52,22 +52,30 @@ Weeks start on Mondays. The course deadlines are not yet in this plan and must b
 - [x] Decide the LLM provider for Phase 0 ([§6](#6-open-decisions)); get API keys, including a
   judge endpoint for `gpt-oss-120b`. *(2026-10-27: Groq free tier for judge + primary agent;
   Gemini key available as a separate experiment series.)*
-- [ ] **A:** create the git repo; add upstream at `third_party/vakra` pinned to `00dc68f`; run
-  `make download`, `make build`, `docker compose up -d`, `make validate` on at least one
-  machine. Confirm ≥ 8 GB RAM for Docker and 35 GB of disk.
+- [ ] **A:** create the git repo; add upstream at `third_party/vakra` pinned to `00dc68f`; get
+  data, image, containers and MCP validation working on at least one machine.
+  *Partly done (2026-10-27), one machine (Anurag's laptop, 7 GiB RAM):*
+  - Repo, submodule, train data and image are done.
+  - Containers, MCP and checksums validated for Caps 1–3 via our scripts. Upstream's `make`/
+    Compose path doesn't work on this machine; see [results/phase0.md](results/phase0.md).
+  - **Cap 4 is not started**: 7 GiB RAM is less than its 8 GB limit, plus a 7.8 GB index.
 - [ ] Everyone: run the upstream smoke test on one domain per capability. Browse the tools in
-  `tools_explorer`.
+  `tools_explorer`. *Caps 1–3 smoke run on one machine (V0 and V0-k32); Cap 4 not run;
+  teammates not yet.*
 
 **Week 1 (Nov 2 – Nov 8)**
 
-- [ ] **C:** write `scripts/make_splits.py` and commit the `smoke`, `dev-seen`, `dev-heldout`
-  and `train-rest` uuid lists.
-- [ ] **C:** set up the evaluation wrapper `scripts/evaluate.py` around upstream
-  `evaluator/evaluator.py`; make it run end to end on `smoke`.
+- [x] **C:** write `scripts/make_splits.py` and commit the `smoke`, `dev-seen`, `dev-heldout`
+  and `train-rest` uuid lists. *(Done early, 2026-10-27; see [splits/README.md](splits/README.md).)*
+- [x] **C:** set up the evaluation wrapper `scripts/evaluate.py` around upstream
+  `evaluator/evaluator.py`; make it run end to end on `smoke`. *(Verified on Caps 1–3 smoke
+  runs.)*
 - [ ] **All:** data exploration notebook. Cover tool counts per domain, hop distribution, policy
-  types and unanswerable rate in Cap 4. Answer the open questions in SPEC §11.
+  types and unanswerable rate in Cap 4. Answer the open questions in SPEC §11. *Partial: some
+  first statistics are in results/phase0.md; no notebook yet.*
 - [ ] **A:** **V0 baseline.** Run the upstream `LangGraphReActAgent` on `dev-heldout` for all
-  4 caps with the chosen model, then score it.
+  4 caps with the chosen model, then score it. ***Blocked*** by free-tier limits; see §6.1.
+  Smoke-only results so far: V0-k32 on Groq scored Cap 2 4/6 and Cap 3 0/4.
 
 **Phase 0 deliverable:** environment reproducible on at least 2 machines; V0 scores for all
 4 capabilities; splits committed.
@@ -156,7 +164,9 @@ same LLM.
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | LLM API cost. A full test run is ~5.2k dialogues × several LLM calls each, plus judge calls | High | High | Budget first; iterate on `smoke` / `dev`; cache LLM responses by prompt hash; use an open-weights model via a cheap or free endpoint for development |
-| Laptop hardware (35 GB disk, 8 GB Docker RAM) | Medium | High | One shared machine as the "env host"; check the university server / cloud VM options in Week 0 |
+| Laptop hardware (35 GB disk, 8 GB Docker RAM) | **Occurred** (7 GiB laptop) | High | Subset data (~6 GB) and CPU image (2.75 GB) keep Caps 1–3 on the laptop; Cap 4 needs a ≥ 16 GB machine (lab server or cloud VM) |
+| Free-tier LLM limits block the baseline | **Occurred** | High | See §6.1. Groq 8K TPM is smaller than one Cap 1–3 request at default top-k; Gemini 3.x is incompatible with upstream's agent path |
+| Slow or unstable campus network (PyPI 30–150 kB/s) | **Occurred** | Medium | pip retries in the image build; keep images and data on one host and share them |
 | Test domains unseen in train | High | Medium | `dev-heldout` split by domain; avoid domain-specific hand rules |
 | Permitted resources and submission format only published late | Medium | Medium | Keep the provider swappable; avoid dependencies on proprietary-only features |
 | PolicyJudge stays private | Medium | Low | Own rule-based policy checker for diagnostics; request access early |
@@ -168,15 +178,29 @@ same LLM.
 
 These must be settled in Week 0. Record each decision and its date here.
 
-1. **Agent LLM and budget:** API models (which, how much $), open weights via Groq / Together,
-   or local Ollama / vLLM on a GPU (which hardware)?
-2. **Course deadlines:** midterm and final report dates, and grading criteria. They may move
+1. **Agent LLM and budget.** *Phase 0 decision (2026-10-27):* Groq free tier,
+   `openai/gpt-oss-120b`, for the judge (fixed) and the primary agent series. Evidence and open
+   choice for the dev-heldout baseline:
+
+   | Option | Fits VAKRA? | Cost | Caveat |
+   |---|---|---|---|
+   | Groq free, default V0 (top-k 128) | **No.** Every Cap 1–3 request is 11K–14K tokens vs. an 8K TPM limit | Free | — |
+   | Groq free, V0-k32 (`--top-k-tools 32`) | Yes for Caps 2–3 smoke; 1,000 requests/day limits dev-heldout to several days | Free | Not the upstream default; Cap 1 still rejected for large domains |
+   | Groq paid tier, default V0 | Likely: higher TPM | Paid | Needs a team budget decision |
+   | Gemini `gemini-3.8-flash` via upstream agent | **No.** Multi-step fails (missing `thought_signature`), and 150–437 s per call | Free | Works only with a client that preserves thought signatures (Phase 1 runner) |
+   | Open weights on our own GPU (vLLM, OpenAI-compatible) | Yes, no TPM limit | Free if hardware is available | Needs a GPU host; Kaggle notebooks can't run the Docker environment |
+
+   **Still to decide:** which option produces the official V0 on dev-heldout.
+2. **Kaggle** (`kaggle.json` is set up): useful for GPU work that needs no containers, such as
+   training a tool retriever (decision 5). It can't host the benchmark containers.
+3. **Course deadlines:** midterm and final report dates, and grading criteria. They may move
    Phase 2 earlier.
-3. **Official SemEval submission:** yes or no? If yes, which subtasks? The FAQ allows any subset.
-4. **Fine-tuning:** allowed and wanted? For example, fine-tuning a small tool-retriever
+4. **Official SemEval submission:** yes or no? If yes, which subtasks? The FAQ allows any subset.
+5. **Fine-tuning:** allowed and wanted? For example, fine-tuning a small tool-retriever
    bi-encoder or cross-encoder on train (query → gold tool) pairs is cheap and fits the IR
    course well.
-5. **Compute host:** where do the containers and data live, and who has access?
+6. **Compute host:** where do the containers and data live, and who has access? *Now urgent:
+   Cap 4 needs a machine with ≥ 16 GB RAM.*
 
 ## 7. Working agreements
 
