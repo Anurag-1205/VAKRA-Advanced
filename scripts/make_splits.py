@@ -40,7 +40,10 @@ def fingerprint() -> str:
     h = hashlib.sha256()
     for f in sorted(TRAIN_DIR.glob("*/*/*.json")):
         h.update(str(f.relative_to(TRAIN_DIR)).encode())
-        h.update(f.read_bytes())
+        # Stream: some output files are > 2 GB and would not fit in RAM on 7 GB machines.
+        with f.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
     return h.hexdigest()[:16]
 
 
