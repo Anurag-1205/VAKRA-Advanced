@@ -1,7 +1,8 @@
 # VAKRA-Advanced: Project Plan
 
-Team: **Anurag Kaushal, Aayush Pandey, Piyush Agarwal**. Plan v0.1, written 2026-10-26.
-Technical details are in [SPEC.md](SPEC.md).
+Team: **Anurag Kaushal, Aayush Pandey, Piyush Agarwal**. Plan v0.2, revised 2026-10-29 for a
+hard deadline of **2026-11-15** for all course deliverables (v0.1 of 2026-10-26 ran to
+2026-12-20). Technical details are in [SPEC.md](SPEC.md).
 
 ## 1. Objectives
 
@@ -14,8 +15,15 @@ Technical details are in [SPEC.md](SPEC.md).
 | O5 | Course deliverables: baseline vs. improved comparison, ablations, failure analysis, report | Results table + error taxonomy |
 | O6 | Optional: submit to SemEval-2027 Task 11 and write the system paper | Submission accepted; paper submitted |
 
-**Scope rule:** O1 and O2 are the minimum deliverable. O3 is the target. O4 is a stretch goal
-unless timing allows. O6 depends on the decisions in [§6](#6-open-decisions).
+**Scope rule (deadline 2026-11-15):**
+
+- **O1, O2 and O5 are the deliverable.** O1 is limited to Caps 2 and 3, scored on the fixed
+  `dev-eval` subset ([§3](#3-timeline)), not all of `dev-heldout`.
+- **O3 (Cap 4) is conditional.** It goes ahead only if a ≥ 16 GB machine is running the Cap 4
+  container by 2026-11-02. Otherwise the report lists it as future work.
+- **O4 (Cap 1) is dropped.**
+- **O6 (SemEval) is outside the deadline.** The official evaluation window is January 2027, so
+  it can only be a follow-up to the course project.
 
 ## 2. Workstreams and owners
 
@@ -31,8 +39,66 @@ needs a review from someone other than its author.
 
 ## 3. Timeline
 
-Weeks start on Mondays. The course deadlines are not yet in this plan and must be added
-([§6](#6-open-decisions)). SemEval dates are from the task site; exact days are still TBA.
+Weeks start on Mondays. Course milestones:
+
+- **Midterm checkpoint: Saturday 2026-10-31.**
+- **Final submission: Sunday 2026-11-15**, all course deliverables. Code freezes on 2026-11-12.
+
+**Evaluation subset `dev-eval`:** a fixed, domain-stratified sample of `dev-heldout`. It
+contains about 120 Cap 2 items and all 35 Cap 3 items, plus about 60 Cap 4 items if Cap 4 is in
+scope. A full `dev-heldout` run takes about 4,500 Groq requests, which is roughly 5 days of the
+free tier's 1,000 requests/day. A Caps 2–3 `dev-eval` run fits in under a day, so each variant
+costs about one day of quota. Development iterates on `smoke`.
+
+### Compressed schedule (v0.2)
+
+**Stage 1: Close Phase 0 (Thu Oct 29 – Sun Nov 1)**
+
+- [ ] **All:** settle open decisions 1, 2 and 6 ([§6](#6-open-decisions)) by Oct 30.
+- [ ] **C:** add `dev-eval` to `make_splits.py` and commit it, by Oct 30.
+- [ ] **A:** V0-k32 on `dev-eval`, Caps 2 and 3, scored. This is the reference every other
+  variant is compared against. Target: Oct 30, so it is in the midterm material.
+- [ ] **B (Aayush):** reproduce the setup on a second machine. Report its RAM so the team can
+  decide whether it can host Cap 4.
+- [ ] **B:** start offline tool retrieval: index the tool catalogs, then measure Recall@k and
+  MRR against gold tools on `train-rest`. Needs no LLM and no containers. A first BM25 Recall@k
+  number by Oct 31 is a bonus for the midterm, not a requirement.
+- [ ] **All, Sat Oct 31: midterm checkpoint.** Material:
+  - Problem, task and the four capabilities (from README and SPEC).
+  - Proposed architecture (SPEC §4).
+  - Work done: environment, splits, runner and official scoring (results/phase0.md).
+  - Baseline numbers: V0-k32 on `smoke`, and on `dev-eval` if the run finishes.
+  - Blockers found and how they were handled (free-tier limits, Gemini, Cap 4 RAM).
+  - Plan to Nov 15: this schedule, the experiment matrix (§4) and the scope cut (§1).
+
+**Stage 2: Build (Mon Nov 2 – Sun Nov 8)**
+
+- [ ] **A:** own runner and agent with the same output format as upstream (V1 parity check);
+  trace logging; executor with schema validation and argument repair (V3).
+- [ ] **B:** BM25, dense and hybrid (RRF) retrieval; pick k from the Recall@k curve (V2).
+  Plan-then-act with state-store slots for Cap 3 (V4).
+- [ ] **C:** `diagnostics.py` on top of traces. If Cap 4 is in scope: document retrieval,
+  policy guard and abstention (V6).
+
+**Stage 3: Experiments and analysis (Mon Nov 9 – Thu Nov 12)**
+
+- [ ] **All:** V1–V4 (and V6 if in scope) on `dev-eval`, one variant per day of quota.
+- [ ] **B:** retriever ablations (offline, no LLM cost).
+- [ ] **C:** error taxonomy over failed items, about 20 per capability, with representative
+  success and failure traces.
+- [ ] **Thu Nov 12:** code freeze. Only bug fixes for reported numbers after this.
+
+**Stage 4: Report and submission (Fri Nov 13 – Sun Nov 15)**
+
+- [ ] **All:** results table, ablation table, error analysis and limitations written up. The
+  report skeleton (design and method sections) should be drafted from Nov 9, in parallel with
+  Stage 3.
+- [ ] **All:** README reproducibility pass; every reported number links to a `run_id`.
+- [ ] **Sun Nov 15:** submit.
+
+### Original schedule (v0.1, superseded)
+
+Kept for the record of Week 0 statuses. Dates after 2026-11-15 no longer apply.
 
 ### Phase 0: Setup and baseline (2026-10-26 → 2026-11-08)
 
@@ -151,13 +217,16 @@ same LLM.
 | V6 | + policy guard, abstention, retriever routing | 4 | Fewer policy violations; credit on unanswerable items |
 | V7 | + Cap 1 column grounding + retrieved few-shot | 1 | Fewer argument-name errors |
 
+**Scope for 2026-11-15:** V0 (as V0-k32), V1, V2, V3 and V4 on Caps 2 and 3. V5 only if time
+allows. V6 only if Cap 4 is in scope ([§1](#1-objectives)). V7 is dropped.
+
 **Ablations for the report:**
 
-- Retriever type (BM25 / dense / hybrid / + rerank) × k ∈ {5, 10, 20, 50}.
-- With vs. without document expansion.
+- Retriever type (BM25 / dense / hybrid) × k ∈ {5, 10, 20, 50}. Offline, so it costs no quota.
+  Reranking is a stretch goal.
 - ReAct vs. plan-then-act, bucketed by hop count.
-- Prompt-only policy vs. guard in code.
-- Optionally, a second LLM to show the improvements are not tied to one model.
+- Prompt-only policy vs. guard in code, only with V6.
+- Dropped for the deadline: document expansion, and a second LLM.
 
 ## 5. Risks and mitigations
 
@@ -173,6 +242,8 @@ same LLM.
 | Upstream repo changes mid-project | Medium | Medium | Pin the commit; bump only deliberately and re-run V1 parity |
 | Evaluator LLM judge is noisy | Medium | Low | Fixed judge model; report CIs; inspect disagreements by hand |
 | Holiday period clashes with the January evaluation window | Medium | Medium | Freeze the config by 2027-01-03; dry-run the full pipeline before then |
+| 17 days to the 2026-11-15 deadline; one slipped stage leaves no time for the report | High | High | Scope cut in §1; fixed `dev-eval` subset; code freeze on Nov 12; report drafted from Nov 9 in parallel |
+| Free-tier quota covers about one `dev-eval` run per day | High | High | One variant per day in Stage 3; iterate on `smoke`; retriever ablations offline; fall back to Groq's paid tier if a run fails and needs repeating |
 
 ## 6. Open decisions
 
@@ -193,8 +264,9 @@ These must be settled in Week 0. Record each decision and its date here.
    **Still to decide:** which option produces the official V0 on dev-heldout.
 2. **Kaggle** (`kaggle.json` is set up): useful for GPU work that needs no containers, such as
    training a tool retriever (decision 5). It can't host the benchmark containers.
-3. **Course deadlines:** midterm and final report dates, and grading criteria. They may move
-   Phase 2 earlier.
+3. **Course deadlines:** *Decided (2026-10-29):* midterm checkpoint on **2026-10-31**, final
+   submission on **2026-11-15**. The plan is compressed to fit ([§3](#3-timeline)). Still to
+   confirm: the grading criteria, and the midterm's format (report, slides or demo).
 4. **Official SemEval submission:** yes or no? If yes, which subtasks? The FAQ allows any subset.
 5. **Fine-tuning:** allowed and wanted? For example, fine-tuning a small tool-retriever
    bi-encoder or cross-encoder on train (query → gold tool) pairs is cheap and fits the IR
@@ -217,10 +289,13 @@ These must be settled in Week 0. Record each decision and its date here.
 
 ## 8. Final deliverables checklist
 
+All items except the last are due **2026-11-15**.
+
 - [ ] Reproducible code: setup instructions, configs, scripts (README).
-- [ ] Baseline (V0) and best variant for each capability in scope.
+- [ ] Baseline (V0-k32) and best variant for each capability in scope.
 - [ ] Results table: official metric plus diagnostics, baseline vs. variants.
 - [ ] Ablation tables ([§4](#4-experiment-matrix)).
 - [ ] Error taxonomy with representative success and failure traces.
 - [ ] Course report (design, method, results, limitations).
-- [ ] (Optional) SemEval submission files and system paper.
+- [ ] (Optional, after the deadline) SemEval submission files and system paper. The evaluation
+  window is January 2027.
