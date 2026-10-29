@@ -20,6 +20,22 @@ from common import AGENT_BACKENDS, CAPABILITIES, REPO_ROOT, RUNS_DIR, UPSTREAM, 
 
 DEFAULT_MODELS = {"groq": "openai/gpt-oss-120b", "gemini": "gemini-3.8-flash"}
 
+# Upstream create_llm builds ChatOpenAI with langchain's default max_retries=2. On Groq's
+# free tier, an HTTP 429 (tokens/minute) that outlasts two retries ends the item as an error,
+# which scores rate limiting as agent failure. This shim raises the default before running
+# upstream's runner unchanged; prompts, tools and agent logic are untouched.
+RETRY_SHIM = """
+import runpy, sys
+from langchain_openai import ChatOpenAI
+_init = ChatOpenAI.__init__
+def _init_with_retries(self, *args, **kwargs):
+    kwargs.setdefault("max_retries", {max_retries})
+    _init(self, *args, **kwargs)
+ChatOpenAI.__init__ = _init_with_retries
+sys.argv[0] = "benchmark_runner.py"
+runpy.run_path("benchmark_runner.py", run_name="__main__")
+"""
+
 
 def git_sha(path: Path) -> str:
     """Short HEAD sha, suffixed '-dirty' when tracked files have local changes."""
@@ -60,6 +76,8 @@ def main() -> int:
     ap.add_argument("--model", default=None, help=f"default per backend: {DEFAULT_MODELS}")
     ap.add_argument("--top-k-tools", type=int, default=128, help="upstream default is 128")
     ap.add_argument("--max-iterations", type=int, default=None)
+    ap.add_argument("--llm-max-retries", type=int, default=None,
+                    help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
     ap.add_argument("--run-id", default=None, help="reuse to resume a run")
     args = ap.parse_args()
 
@@ -84,6 +102,7 @@ def main() -> int:
         "base_url": env["OPENAI_BASE_URL"],
         "top_k_tools": args.top_k_tools,
         "max_iterations": args.max_iterations,
+        "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
         "git_sha": git_sha(REPO_ROOT),
         "upstream_sha": git_sha(UPSTREAM),
@@ -99,8 +118,11 @@ def main() -> int:
         if not domains:
             print(f"[cap {cap_id}] no items in split '{args.split}', skipping")
             continue
+        runner = ["benchmark_runner.py"]
+        if args.llm_max_retries is not None:
+            runner = ["-c", RETRY_SHIM.format(max_retries=args.llm_max_retries)]
         cmd = [
-            sys.executable, "benchmark_runner.py",
+            sys.executable, *runner,
             "--capability_id", str(cap_id),
             "--output", str(out_dir),
             "--provider", args.provider,
