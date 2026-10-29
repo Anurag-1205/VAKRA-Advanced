@@ -18,6 +18,13 @@ from common import CAPABILITIES, RUNS_DIR
 
 def outcome(score: float, pred: dict, meta: dict) -> str:
     if score == 1.0:
+        # Upstream gives full credit when the gold says "I can not answer" and no tool was called,
+        # which a crashed agent also satisfies (empty answer, no calls). Keep that apart.
+        if pred.get("status") == "error":
+            return "credited, but the agent crashed (unanswerable gold, no tool call)"
+        grounded = (meta.get("score_explanation") or {}).get("groundedness") or ""
+        if "Special case" in grounded:
+            return "correct: abstained on an unanswerable item"
         return "correct: exact tool match" if meta.get("exactmatch_score") == 1.0 else "correct: answer judged right"
     if pred.get("status") == "error":
         err = pred.get("error", "")
@@ -52,7 +59,8 @@ def main() -> int:
         counts = Counter()
         for dom in json.loads(eval_file.read_text())["domains"].values():
             for d in dom["dialogues"]:
-                # Single-turn items (Caps 2, 3); multi-turn Cap 4 would need per-turn handling.
+                # One scored turn per item: Caps 2-3 are single-turn, and for Cap 4 upstream scores
+                # only the final turn (earlier turns are given as history with their gold answers).
                 meta = d["details"]["per_turn"][0]["metadata"]
                 counts[outcome(d["score"], preds.get(d["uuid"], {}), meta)] += 1
         n = sum(counts.values())

@@ -79,9 +79,12 @@ Topic-conditional policies name 12 topic groups. The most common are Movies/TV/S
      tool-name matching in our diagnostics must map the two.
 5. **Abstention is a policy problem.** All "I can not answer" turns sit in dialogues with a
    tool-use policy, and 96% of them make no tool call. The intended behaviour is to refuse
-   when the policy forbids the tool the question needs. Upstream's scorer gives full credit for
-   "unanswerable and no tool call", so a policy guard that abstains correctly is worth about
-   8–9% of Cap 4 turns. That is V6 in the experiment matrix.
+   when the policy forbids the tool the question needs.
+   - Upstream scores only the **final turn** of each Cap 4 dialogue, and every unanswerable
+     turn is a final turn. So 15% of train dialogues and **18% of `dev-eval` dialogues** are
+     decided by abstaining correctly. That is the target of V6 in the experiment matrix.
+   - The scorer gives full credit for "unanswerable and no tool call", which a crashed agent
+     also gets ([baseline_dev_eval.md](baseline_dev_eval.md)).
 6. **Some Cap 4 dialogues cannot fit in context.** In `dev-eval`, 10 of 60 dialogues carry
    1.9–9.7 million characters of history, earlier turns' gold answers in `authors` and `menu`.
    That is far beyond the model's context window, whatever the tool count. Upstream's agent
