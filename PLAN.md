@@ -273,8 +273,9 @@ These must be settled in Week 0. Record each decision and its date here.
      ([results/phase0.md](results/phase0.md) §4a).
    - **Now: Groq Developer (paid) tier on Aayush's key**, with limits of 250K tokens/minute and
      500K requests/day. The reference baseline is upstream's default **V0 (top-k 128)** on
-     `dev-eval`, with **V0-k32** as a second row. Estimated cost: about $1–1.50 per Caps 2–3
-     `dev-eval` run at k = 128, and $15–25 for the project.
+     `dev-eval`, with **V0-k32** as a second row. Measured cost: **$1.04 for both** Caps 2–3
+     `dev-eval` runs (V0 and V0-k32), including the judge. That is roughly $0.80 for a k = 128
+     run, and about $10–15 for the project.
    - All runs use `--llm-max-retries 8`.
 2. **Kaggle** (`kaggle.json` is set up): useful for GPU work that needs no containers, such as
    training a tool retriever (decision 5). It can't host the benchmark containers.
