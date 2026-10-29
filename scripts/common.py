@@ -32,7 +32,7 @@ CAPABILITIES = {
     3: ("capability_3_multihop_reasoning", "capability_multihop_reasoning"),
     4: ("capability_4_multiturn", "capability_multiturn"),
 }
-SPLIT_NAMES = ("smoke", "dev-seen", "dev-heldout", "train-rest")
+SPLIT_NAMES = ("smoke", "dev-seen", "dev-heldout", "train-rest", "dev-eval")
 
 
 def load_dotenv(path: Path = REPO_ROOT / ".env") -> dict:

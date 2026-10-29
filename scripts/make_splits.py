@@ -8,6 +8,9 @@ Splits (SPEC.md §7.1), all as uuid lists per capability:
   dev-seen     ~15% of items of each remaining domain, per capability.
   train-rest   everything else (few-shot pool, index expansion, error mining).
   smoke        a few dev-heldout items per capability from <= 2 domains.
+  dev-eval     a fixed, domain-stratified sample of dev-heldout per capability,
+               small enough to score one variant per day on Groq's free tier.
+               Drawn with its own RNG, so adding it left the other splits unchanged.
 
 Usage:
     python scripts/make_splits.py                       # writes splits/*.json
@@ -65,10 +68,42 @@ def pick_heldout(data, frac: float, rng: random.Random, exclude: set[str]) -> se
     return heldout
 
 
+def stratified_sample(by_domain: dict[str, list[str]], n: int, rng: random.Random) -> list[str]:
+    """n uuids spread over domains in proportion to their size (largest remainder),
+    with at least one per domain when n allows it."""
+    total = sum(map(len, by_domain.values()))
+    if n >= total:
+        return sorted(u for us in by_domain.values() for u in us)
+    quota = {d: n * len(us) / total for d, us in by_domain.items()}
+    alloc = {d: min(len(by_domain[d]), max(1, math.floor(q))) for d, q in quota.items()}
+    order = sorted(by_domain, key=lambda d: (quota[d] - alloc[d], d), reverse=True)
+    i = 0
+    while sum(alloc.values()) < n:
+        d = order[i % len(order)]
+        if alloc[d] < len(by_domain[d]):
+            alloc[d] += 1
+        i += 1
+    for d in reversed(order):  # only when n < number of domains
+        if sum(alloc.values()) <= n:
+            break
+        alloc[d] -= 1
+    picked = []
+    for dom in sorted(by_domain):
+        uuids = sorted(by_domain[dom])
+        rng.shuffle(uuids)
+        picked += uuids[: alloc[dom]]
+    return sorted(picked)
+
+
 def build(args) -> tuple[dict, dict]:
     data = load_train()
     rng = random.Random(args.seed)
     heldout = pick_heldout(data, args.heldout_frac, rng, set(args.heldout_exclude))
+
+    # Separate RNG: dev-eval was added after the other splits were committed,
+    # and drawing it from `rng` would have reshuffled them.
+    eval_rng = random.Random(f"{args.seed}-dev-eval")
+    eval_size = dict(zip(data, args.eval_size))
 
     splits = {name: {} for name in SPLIT_NAMES}
     for cap_dir, doms in data.items():
@@ -91,7 +126,10 @@ def build(args) -> tuple[dict, dict]:
             rng.shuffle(uuids)
             smoke += uuids[: math.ceil(args.smoke_per_cap / len(smoke_doms))]
 
-        for name, uuids in zip(SPLIT_NAMES, (smoke[: args.smoke_per_cap], dev_seen, dev_heldout, rest)):
+        held_by_domain = {d: us for d, us in doms.items() if d in heldout}
+        dev_eval = stratified_sample(held_by_domain, eval_size[cap_dir], eval_rng)
+
+        for name, uuids in zip(SPLIT_NAMES, (smoke[: args.smoke_per_cap], dev_seen, dev_heldout, rest, dev_eval)):
             splits[name][cap_dir] = sorted(uuids)
 
     uuid_domain = {u: d for cap in data.values() for d, us in cap.items() for u in us}
@@ -100,6 +138,7 @@ def build(args) -> tuple[dict, dict]:
         "heldout_frac": args.heldout_frac,
         "seen_frac": args.seen_frac,
         "smoke_per_cap": args.smoke_per_cap,
+        "eval_size": eval_size,
         "heldout_exclude": sorted(args.heldout_exclude),
         "train_fingerprint": fingerprint(),
         "heldout_domains": sorted(heldout),
@@ -124,6 +163,8 @@ def validate(splits: dict, data: dict) -> list[str]:
             problems.append(f"{cap_dir}: dev-seen/dev-heldout/train-rest do not partition the train split")
         if not set(splits["smoke"][cap_dir]) <= parts[1]:
             problems.append(f"{cap_dir}: smoke is not a subset of dev-heldout")
+        if not set(splits["dev-eval"][cap_dir]) <= parts[1]:
+            problems.append(f"{cap_dir}: dev-eval is not a subset of dev-heldout")
         dom_of = {u: d for d, us in doms.items() for u in us}
         held = {dom_of[u] for u in parts[1]}
         seen = {dom_of[u] for u in parts[0] | parts[2]}
@@ -138,6 +179,8 @@ def main() -> int:
     ap.add_argument("--heldout-frac", type=float, default=0.2)
     ap.add_argument("--seen-frac", type=float, default=0.15)
     ap.add_argument("--smoke-per-cap", type=int, default=6)
+    ap.add_argument("--eval-size", type=int, nargs=4, default=[60, 120, 35, 60], metavar=("C1", "C2", "C3", "C4"),
+                    help="dev-eval items per capability (Cap 3's 35 is all of its dev-heldout)")
     ap.add_argument("--heldout-exclude", nargs="*", default=[],
                     help="Domains never chosen as held-out (e.g. very large databases)")
     ap.add_argument("--check", action="store_true", help="Validate committed splits; write nothing")

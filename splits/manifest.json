@@ -3,6 +3,12 @@
  "heldout_frac": 0.2,
  "seen_frac": 0.15,
  "smoke_per_cap": 6,
+ "eval_size": {
+  "capability_1_bi_apis": 60,
+  "capability_2_dashboard_apis": 120,
+  "capability_3_multihop_reasoning": 35,
+  "capability_4_multiturn": 60
+ },
  "heldout_exclude": [
   "bike_share_1",
   "codebase_comments",
@@ -49,6 +55,12 @@
    "capability_2_dashboard_apis": 1146,
    "capability_3_multihop_reasoning": 266,
    "capability_4_multiturn": 576
+  },
+  "dev-eval": {
+   "capability_1_bi_apis": 60,
+   "capability_2_dashboard_apis": 120,
+   "capability_3_multihop_reasoning": 35,
+   "capability_4_multiturn": 60
   }
  },
  "domains": {
@@ -332,6 +344,48 @@
     "talkingdata",
     "university",
     "world_development_indicators"
+   ]
+  },
+  "dev-eval": {
+   "capability_1_bi_apis": [
+    "authors",
+    "cars",
+    "european_football_1",
+    "hockey",
+    "ice_hockey_draft",
+    "menu",
+    "world"
+   ],
+   "capability_2_dashboard_apis": [
+    "authors",
+    "cars",
+    "european_football_1",
+    "hockey",
+    "ice_hockey_draft",
+    "menu",
+    "sales_in_weather",
+    "student_loan",
+    "world"
+   ],
+   "capability_3_multihop_reasoning": [
+    "authors",
+    "cars",
+    "european_football_1",
+    "hockey",
+    "ice_hockey_draft",
+    "student_loan",
+    "world"
+   ],
+   "capability_4_multiturn": [
+    "authors",
+    "cars",
+    "european_football_1",
+    "hockey",
+    "ice_hockey_draft",
+    "menu",
+    "sales_in_weather",
+    "student_loan",
+    "world"
    ]
   }
  }
