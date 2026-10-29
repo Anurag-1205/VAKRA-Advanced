@@ -60,8 +60,9 @@ costs about one day of quota. Development iterates on `smoke`.
 - [x] **Aayush** (reassigned from C): add `dev-eval` to `make_splits.py` and commit it, by
   Oct 30. *(Built 2026-10-29: 60 / 120 / 35 / 60 items for Caps 1–4; see
   [splits/README.md](splits/README.md).)*
-- [ ] **A:** V0-k32 on `dev-eval`, Caps 2 and 3, scored. This is the reference every other
-  variant is compared against. Target: Oct 30, so it is in the midterm material.
+- [ ] **Aayush** (moved from A, 2026-10-29): V0-k32 on `dev-eval`, Caps 2 and 3, scored, on
+  Aayush's machine and Groq key. This is the reference every other variant is compared
+  against. Target: Oct 30, so it is in the midterm material.
 - [ ] **B (Aayush):** reproduce the setup on a second machine. Report its RAM so the team can
   decide whether it can host Cap 4.
 - [ ] **B:** start offline tool retrieval: index the tool catalogs, then measure Recall@k and
