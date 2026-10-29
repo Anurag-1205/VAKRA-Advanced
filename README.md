@@ -85,6 +85,7 @@ cp .env.example .env       # then put your keys in .env
 python3 -m venv .venv && source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -c constraints.txt -e "third_party/vakra[init]" -r third_party/vakra/requirements_benchmark.txt
+pip install ijson          # only for scripts/data_stats.py (streams multi-GB answer files)
 
 # 3. Check the LLM key: model list, one tool call, rate-limit headers. Prints no secrets.
 python scripts/check_llm.py

@@ -70,10 +70,11 @@ costs about one day of quota. Development iterates on `smoke`.
 - [x] **B:** start offline tool retrieval: index the tool catalogs, then measure Recall@k and
   MRR against gold tools. Needs no LLM and no containers. *(Done 2026-10-29 on dev-heldout;
   see [results/tool_recall.md](results/tool_recall.md).)*
-- [ ] **Aayush** (reassigned from C for the midterm, 2026-10-29): data-exploration statistics.
+- [x] **Aayush** (reassigned from C for the midterm, 2026-10-29): data-exploration statistics.
   Cover items and domains per capability, tool counts per domain, hop distribution,
   dialogue length, policy types and the unanswerable rate in Cap 4. Answer what SPEC §11 can
-  answer from train data. Target: Oct 30.
+  answer from train data. *(Done 2026-10-29: [results/data_stats.md](results/data_stats.md),
+  `scripts/data_stats.py`.)*
 - [ ] **Aayush** (reassigned from C, optional): open the PolicyJudge access request on
   IBM/vakra (SPEC §11 question 5).
 - [ ] **Anurag:** write the midterm report from `results/`. Target: Oct 30.
