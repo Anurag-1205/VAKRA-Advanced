@@ -54,8 +54,12 @@ costs about one day of quota. Development iterates on `smoke`.
 
 **Stage 1: Close Phase 0 (Thu Oct 29 – Sun Nov 1)**
 
-- [ ] **All:** settle open decisions 1, 2 and 6 ([§6](#6-open-decisions)) by Oct 30.
-- [ ] **C:** add `dev-eval` to `make_splits.py` and commit it, by Oct 30.
+- [x] **All:** settle open decisions 1 and 6 ([§6](#6-open-decisions)). *(2026-10-29:
+  V0-k32 on Groq free tier; Aayush's machine for Cap 4.)* Decision 2 (Kaggle) is not needed
+  for the deadline.
+- [x] **Aayush** (reassigned from C): add `dev-eval` to `make_splits.py` and commit it, by
+  Oct 30. *(Built 2026-10-29: 60 / 120 / 35 / 60 items for Caps 1–4; see
+  [splits/README.md](splits/README.md).)*
 - [ ] **A:** V0-k32 on `dev-eval`, Caps 2 and 3, scored. This is the reference every other
   variant is compared against. Target: Oct 30, so it is in the midterm material.
 - [ ] **B (Aayush):** reproduce the setup on a second machine. Report its RAM so the team can
@@ -261,7 +265,10 @@ These must be settled in Week 0. Record each decision and its date here.
    | Gemini `gemini-3.8-flash` via upstream agent | **No.** Multi-step fails (missing `thought_signature`), and 150–437 s per call | Free | Works only with a client that preserves thought signatures (Phase 1 runner) |
    | Open weights on our own GPU (vLLM, OpenAI-compatible) | Yes, no TPM limit | Free if hardware is available | Needs a GPU host; Kaggle notebooks can't run the Docker environment |
 
-   **Still to decide:** which option produces the official V0 on dev-heldout.
+   *Decided (2026-10-29):* **Groq free tier with `--top-k-tools 32` (V0-k32)** is the reference
+   baseline for every comparison, scored on `dev-eval`. Groq's paid tier is the fallback if a
+   run has to be repeated within a day. The report must call it V0-k32, not upstream's default
+   V0.
 2. **Kaggle** (`kaggle.json` is set up): useful for GPU work that needs no containers, such as
    training a tool retriever (decision 5). It can't host the benchmark containers.
 3. **Course deadlines:** *Decided (2026-10-29):* midterm checkpoint on **2026-10-31**, final
@@ -272,7 +279,10 @@ These must be settled in Week 0. Record each decision and its date here.
    bi-encoder or cross-encoder on train (query → gold tool) pairs is cheap and fits the IR
    course well.
 6. **Compute host:** where do the containers and data live, and who has access? *Now urgent:
-   Cap 4 needs a machine with ≥ 16 GB RAM.*
+   Cap 4 needs a machine with ≥ 16 GB RAM.* *2026-10-29:* Aayush's machine is the Cap 4
+   candidate and the second machine. It has 15 GiB RAM and 24 CPUs, no GPU. Docker 29.1 and
+   Compose v2 are installed, and 59 GB of disk is free, so the ChromaDB index fits. Close other
+   apps while the Cap 4 container runs: its limit is 8 GB, and about 10 GiB is usually free.
 
 ## 7. Working agreements
 
