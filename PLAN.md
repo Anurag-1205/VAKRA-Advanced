@@ -64,17 +64,28 @@ costs about one day of quota. Development iterates on `smoke`.
   Aayush's machine and Groq key. This is the reference every other variant is compared
   against. *(Done 2026-10-29: V0 (k = 128) Cap 2 0.408, Cap 3 0.343; V0-k32 0.425 / 0.171.
   See [results/baseline_dev_eval.md](results/baseline_dev_eval.md).)*
-- [ ] **B (Aayush):** reproduce the setup on a second machine. Report its RAM so the team can
-  decide whether it can host Cap 4.
-- [ ] **B:** start offline tool retrieval: index the tool catalogs, then measure Recall@k and
-  MRR against gold tools on `train-rest`. Needs no LLM and no containers. A first BM25 Recall@k
-  number by Oct 31 is a bonus for the midterm, not a requirement.
+- [x] **B (Aayush):** reproduce the setup on a second machine. Report its RAM so the team can
+  decide whether it can host Cap 4. *(Done 2026-10-29: smoke scores match the first machine;
+  see [results/phase0.md](results/phase0.md) §4a.)*
+- [x] **B:** start offline tool retrieval: index the tool catalogs, then measure Recall@k and
+  MRR against gold tools. Needs no LLM and no containers. *(Done 2026-10-29 on dev-heldout;
+  see [results/tool_recall.md](results/tool_recall.md).)*
+- [ ] **Aayush** (reassigned from C for the midterm, 2026-10-29): data-exploration statistics.
+  Cover items and domains per capability, tool counts per domain, hop distribution,
+  dialogue length, policy types and the unanswerable rate in Cap 4. Answer what SPEC §11 can
+  answer from train data. Target: Oct 30.
+- [ ] **Aayush** (reassigned from C, optional): open the PolicyJudge access request on
+  IBM/vakra (SPEC §11 question 5).
+- [ ] **Anurag:** write the midterm report from `results/`. Target: Oct 30.
 - [ ] **All, Sat Oct 31: midterm checkpoint.** Material:
   - Problem, task and the four capabilities (from README and SPEC).
   - Proposed architecture (SPEC §4).
   - Work done: environment, splits, runner and official scoring (results/phase0.md).
-  - Baseline numbers: V0-k32 on `smoke`, and on `dev-eval` if the run finishes.
-  - Blockers found and how they were handled (free-tier limits, Gemini, Cap 4 RAM).
+  - Baseline numbers: V0 and V0-k32 on `dev-eval` with the failure breakdown
+    (results/baseline_dev_eval.md), and tool-retrieval recall (results/tool_recall.md).
+  - Data statistics (results/data_stats.md).
+  - Blockers found and how they were handled (free-tier token cap → paid tier, Gemini,
+    Cap 4 RAM and disk).
   - Plan to Nov 15: this schedule, the experiment matrix (§4) and the scope cut (§1).
 
 **Stage 2: Build (Mon Nov 2 – Sun Nov 8)**
