@@ -44,7 +44,10 @@ for Cap 4.
   [tool_recall.md](tool_recall.md). With 32 tools, all gold tools survive the shortlist for
   only 71% of Cap 3 items, against 94% with 128.
 
-Wall time: V0 about 20 min for both caps, V0-k32 about 15 min.
+Wall time: V0 about 20 min for Caps 2–3, V0-k32 about 15 min, V0 Cap 4 about 30 min.
+
+Groq cost, judge included: **$2.00 for all three runs**. That is $1.04 for the two Caps 2–3 runs
+and $0.96 for the Cap 4 run.
 
 ## Where items are lost
 
