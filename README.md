@@ -113,6 +113,9 @@ Notes:
 
 - **Why not upstream `make download`?** It tries the gated test repo whenever *any* Hugging
   Face token is found, including a cached CLI login, and then skips the train split.
+- **Slow network?** If the image build fails with PyPI read timeouts, rerun it as
+  `USE_UV=1 scripts/build_image.sh`. It installs the same requirements with `uv`, which
+  downloads in parallel. Earlier layers are cached, so the retry resumes where it failed.
 - **`constraints.txt`** pins `mcp<2`. With mcp 2.x, upstream's evaluator fails to connect.
 - **Compose:** `scripts/containers.sh` mirrors `docker-compose.yml` with plain `docker run`,
   because Ubuntu's `docker-compose` v1.29 rejects that file. Prefer
