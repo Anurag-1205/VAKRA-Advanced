@@ -13,31 +13,24 @@
 \title{\vspace{-2em}\textbf{\large VAKRA-Advanced: Tool-Using LLM Agents for Multi-Hop,
 Multi-Source Reasoning}\\[0.2em] \normalsize Phase 1 Report --- Environment, Baseline, and
 Diagnostics}
-\author{\small Anurag Kaushal (\texttt{[Roll No.]}) \quad Aayush Pandey (\texttt{[Roll No.]})
-\quad Piyush Agarwal (\texttt{[Roll No.]})}
-\date{\small October 30, 2026}
+\author{\small Anurag Kaushal (\texttt{2025202013}) \quad Aayush Pandey (\texttt{2025201058})
+\quad Piyush Agarwal (\texttt{2025201082})}
+
+\date{}
 
 \begin{document}
 \maketitle
 \vspace{-1.5em}
 
-\textbf{Task.} VAKRA-Advanced (SemEval 2027) is about building an agent that answers a user's
-question by using external tools, rather than answering from what a language model already
-"knows". Each domain (e.g.\ hockey, sales, movies) comes with its own set of tools -- anywhere
-from 6 to over 300 -- and the agent must pick the right one, fill in its inputs correctly, and,
-when one tool's output is needed as input to another, chain several tool calls together.
-Sometimes the tools alone are not enough, and the agent must also look up supporting text from a
-document collection. Some questions additionally come with a plain-English rule (a "policy")
-saying which tools may or may not be used, and the agent must follow it, even if that means
-refusing to answer. The benchmark covers four such capabilities: Tool Selection, Multi-hop API
-Reasoning, API Chaining, and Multi-source reasoning with policies. To check an answer, the
-official evaluator re-runs the agent's exact tool calls against the real tools and checks that
-they match the expected ones; if not, an LLM judge decides whether the final answer is still
-correct and properly backed up by the evidence the agent actually collected. Only the last
-question of a conversation is graded, and a correct, honest "I cannot answer" (when the policy
-genuinely blocks every useful tool) counts as fully correct. Following the proposal, our project
-takes up Tool Selection and Multi-hop API Reasoning first, the multi-source/policy capability if
-compute allows, and leaves API Chaining for later.
+\textbf{Task.} VAKRA-Advanced (SemEval 2027) is about building an agent that answers a question
+by using external tools -- picking the right one, filling in its inputs, and chaining calls when
+one tool's output feeds another -- instead of just answering from what a language model already
+"knows". Sometimes it must also pull in supporting text from documents. The benchmark has four such capabilities: Tool Selection, Multi-hop API
+Reasoning, API Chaining, and Multi-source reasoning with policies. An answer is checked by
+re-running the agent's tool calls and judging whether the result and final answer match
+what was expected and are backed up by evidence; a correct, honest refusal also counts as fully
+correct. Our project takes up Tool Selection and Multi-hop API Reasoning first, the
+multi-source/policy capability if compute allows, and API Chaining later.
 
 \textbf{Phase 1 work.} Phase 1 was about setting everything up correctly and measuring where
 things stand today, before changing anything. We got the official benchmark running-- its databases and
