@@ -13,33 +13,48 @@
 \title{\vspace{-2em}\textbf{\large VAKRA-Advanced: Tool-Using LLM Agents for Multi-Hop,
 Multi-Source Reasoning}\\[0.2em] \normalsize Phase 1 Report --- Environment, Baseline, and
 Diagnostics}
-\author{\small Anurag Kaushal \quad Aayush Pandey \quad Piyush Agarwal}
+\author{\small Anurag Kaushal (\texttt{[Roll No.]}) \quad Aayush Pandey (\texttt{[Roll No.]})
+\quad Piyush Agarwal (\texttt{[Roll No.]})}
 \date{\small October 30, 2026}
 
 \begin{document}
 \maketitle
 \vspace{-1.5em}
 
-\textbf{Task.} VAKRA-Advanced (SemEval 2027) asks an agent to answer a request by selecting
-among large catalogs of APIs (6--328 tools/domain), chaining calls across hops, retrieving
-document evidence when APIs alone are insufficient, following natural-language tool-use
-policies, and producing an answer grounded in what the tools returned. Scoring re-executes the
-agent's submitted calls against the live environment and judges only the final turn of each
-dialogue: an exact match against gold tool responses, failing that an LLM correctness judge,
-then a groundedness check; a policy violation (Cap.\,4) fails the turn outright, and a correct,
-tool-free "I cannot answer" earns full credit. Reproducing gold tool \emph{responses} is thus the
-most reliable path to a correct score, and deliberate abstention is a rewarded strategy.
-Following the proposal's priority order, Phase 1 scopes Capability 2 (Tool Selection) and
-Capability 3 (Multi-hop API Reasoning) as primary, Capability 4 (Multi-source + Policies) as
-conditional on compute, and defers Capability 1 (API Chaining).
+\textbf{Task.} VAKRA-Advanced (SemEval 2027) is about building an agent that answers a user's
+question by using external tools, rather than answering from what a language model already
+"knows". Each domain (e.g.\ hockey, sales, movies) comes with its own set of tools -- anywhere
+from 6 to over 300 -- and the agent must pick the right one, fill in its inputs correctly, and,
+when one tool's output is needed as input to another, chain several tool calls together.
+Sometimes the tools alone are not enough, and the agent must also look up supporting text from a
+document collection. Some questions additionally come with a plain-English rule (a "policy")
+saying which tools may or may not be used, and the agent must follow it, even if that means
+refusing to answer. The benchmark covers four such capabilities: Tool Selection, Multi-hop API
+Reasoning, API Chaining, and Multi-source reasoning with policies. To check an answer, the
+official evaluator re-runs the agent's exact tool calls against the real tools and checks that
+they match the expected ones; if not, an LLM judge decides whether the final answer is still
+correct and properly backed up by the evidence the agent actually collected. Only the last
+question of a conversation is graded, and a correct, honest "I cannot answer" (when the policy
+genuinely blocks every useful tool) counts as fully correct. Following the proposal, our project
+takes up Tool Selection and Multi-hop API Reasoning first, the multi-source/policy capability if
+compute allows, and leaves API Chaining for later.
 
-\textbf{Phase 1 work.} We reproduced the official benchmark environment and scoring pipeline
-end to end on two machines, defined domain-held-out evaluation splits (including a fixed
-\texttt{dev-eval} subset used for all numbers below), and ran the unmodified reference agent as
-our baseline, under the benchmark's default 128-tool shortlist and a reduced 32-tool shortlist
-(needed to fit a constrained inference budget). Independently of any LLM call, we also measured
-whether a query's gold tools survive a candidate shortlist at all, and broke down every scored
-item by \emph{why} it succeeded or failed.
+\textbf{Phase 1 work.} Phase 1 was about setting everything up correctly and measuring where
+things stand today, before changing anything. We got the official benchmark running-- its databases and
+tools included. We
+then fixed a set of evaluation groups, held out by domain so that results are never just
+memorizing seen data, including one representative slice, \texttt{dev-eval}, used for every
+number below so that all comparisons are on exactly the same questions. On this slice, we ran the
+benchmark's own ready-made agent, unchanged, as our baseline, once with the full list of
+candidate tools per question (up to 128, the benchmark's default). 
+
+\textbf{Scale and cost.} The benchmark spans 1,300--1,900 training questions per capability
+across 28--40 domains, with tool catalogs of 6--328 tools per domain (median $\sim$105). Tool
+Selection is always a single tool call; Multi-hop questions are almost always exactly two hops
+(90\%); API Chaining questions often need 3 or more chained calls (60\%); and multi-source
+conversations rarely need document retrieval at all ($\sim$3--7\% of turns), always alongside an
+API call. Running one baseline configuration on \texttt{dev-eval}, agent and judge calls
+included, cost about \$1--2 in language-model usage.
 
 \begin{table}[h!]
 \centering\small
@@ -48,28 +63,32 @@ item by \emph{why} it succeeded or failed.
 \toprule
 Configuration & Cap 2 ($n{=}120$) & Cap 3 ($n{=}35$) & Cap 4 ($n{=}60$) & Macro avg.\ (2--4) \\
 \midrule
-Default shortlist (128) & 0.408 & 0.343 & 0.350\footnotemark & 0.367 \\
+Default shortlist (128) & 0.408 & 0.343 & 0.350 & 0.367 \\
 Reduced shortlist (32)  & 0.425 & 0.171 & --- & --- \\
 \bottomrule
 \end{tabular}
 \caption{\small Baseline score on \texttt{dev-eval}. 95\% CI half-widths $\approx\pm0.09$ (Cap 2),
 $\pm0.16$ (Cap 3), $\pm0.12$ (Cap 4).}
-\vspace{-0.8em}
+\vspace{-0.5em}
 \end{table}
-\footnotetext{\small 0.300 excluding 3 dialogues credited only because the agent crashed before
-any tool call.}
 
-\textbf{Findings.} (1) \emph{Retrieval, not reasoning, bounds Capability 3.} At $k{=}32$, the
-gold tool set survives the shortlist for only 71\% of Cap 3 items vs.\ 94\% at $k{=}128$
-(embedding retriever); a lexical+embedding fusion recovers part of this gap (80\% at $k{=}32$).
-This alone explains why the 32-tool baseline roughly halves on Cap 3 while Cap 2 is unaffected.
-(2) \emph{About a fifth of Cap 2--3 items are lost to rejected tool calls}, not wrong ones: the
-model omits a required argument and the provider rejects the call outright, before the agent can
-react. (3) \emph{7--23\% of items reach correct tool evidence or a correct answer but fail
-groundedness.} (4) \emph{Abstention is unclaimed on Cap 4}: $\sim$18\% of \texttt{dev-eval}
-dialogues are decided solely by a deliberate "I cannot answer", which the baseline never does on
-purpose. (5) \emph{$\sim$17\% of Cap 4 dialogues exceed context length} purely from prior-turn
-history, independent of tool count.
-
+\textbf{Findings.}
+\begin{itemize}
+\item \textbf{Retrieval, not reasoning, bounds Capability 3.} With a shortlist of 32 tools, the
+correct tool set is present for only 71\% of Capability 3 questions, versus 94\% with 128 tools;
+a combined (lexical + embedding) retrieval method recovers part of this, reaching 80\% at the
+same shortlist size. This gap alone explains why the 32-tool baseline score is roughly half the
+128-tool score on Capability 3, while Capability 2 is barely affected.
+\item \textbf{About a fifth of Capability 2--3 questions fail before reasoning even matters.} The
+agent's tool call is missing a required input, and the service rejects the call outright instead
+of giving the agent a chance to fix it.
+\item \textbf{7--23\% of questions reach the right tool results or the right answer but are still
+marked wrong}, because the answer is judged as not properly backed up by that evidence.
+\item \textbf{Deliberate refusal is a missed opportunity on Capability 4.} About 18\% of
+\texttt{dev-eval} conversations are decided purely by whether the agent correctly says "I cannot
+answer"; the baseline agent never does this on purpose.
+\item \textbf{About 17\% of Capability 4 conversations are simply too long} for the language
+model to process at all, regardless of how many tools are offered.
+\end{itemize}
 
 \end{document}
