@@ -71,17 +71,5 @@ dialogues are decided solely by a deliberate "I cannot answer", which the baseli
 purpose. (5) \emph{$\sim$17\% of Cap 4 dialogues exceed context length} purely from prior-turn
 history, independent of tool count.
 
-\textbf{Obstacles resolved.} Free-tier inference limits could not fit the benchmark's default
-request size (moved to a paid tier, after confirming via (1) that a shrunk shortlist would bias
-results); a second candidate LLM provider could not sustain multi-step tool calls (deferred);
-Capability 4's document index needed more memory than our primary machine (run on a second
-machine); Capability 1 needed a domain-id mapping the benchmark only ships for its restricted
-test domains (regenerated for our splits).
-
-\textbf{Implications for Phase 2.} Priorities, in expected order of impact: argument
-validation/repair for rejected calls; fused, per-hop tool retrieval for Cap 3; an evidence-only
-answer step to close the groundedness gap; a policy-aware abstention guard for Cap 4; history
-truncation for oversized Cap 4 dialogues. Capability 1 stays future work; Capability 4 proceeds
-now that its resourcing obstacle is resolved.
 
 \end{document}
