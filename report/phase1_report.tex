@@ -59,12 +59,12 @@ included, one call to \texttt{Groq-api} costs about \$1.
 \begin{table}[h!]
 \centering\small
 \vspace{-0.3em}
-\begin{tabular}{@{}lrrrr@{}}
+\begin{tabular}{@{}lrrr@{}}
 \toprule
-Configuration & Cap 2 ($n{=}120$) & Cap 3 ($n{=}35$) & Cap 4 ($n{=}60$) & Macro avg.\ (2--4) \\
+Configuration & Cap 2 ($n{=}120$) & Cap 3 ($n{=}35$) & Cap 4 ($n{=}60$) \\
 \midrule
-Default shortlist (128) & 0.408 & 0.343 & 0.350 & 0.367 \\
-Reduced shortlist (32)  & 0.425 & 0.171 & --- & --- \\
+Default shortlist (128) & 0.408 & 0.343 & 0.350 \\
+Reduced shortlist (32)  & 0.425 & 0.171 & --- \\
 \bottomrule
 \end{tabular}
 \caption{\small Baseline score on \texttt{dev-eval}. 95\% CI half-widths $\approx\pm0.09$ (Cap 2),
@@ -99,6 +99,10 @@ allowed here?" before answering should let us fix this problem.
 \item \textbf{About 17\% of Capability 4 conversations are simply too long} for the language
 model to process at all. These are conversations where earlier turns carry very long answers.
 They become too long to fit within any model's context window, independent of how many tools are being offered.
+\item \textbf{Capability 1 (API Chaining) was left out of Phase 1 and will be taken up next phase.} It
+asks the agent to answer a question by running a chain of simple data operations (such as
+filtering, sorting, or aggregating) one after another on a dataset, where each step builds on
+the result of the one before it. 
 \end{itemize}
 
 \end{document}
