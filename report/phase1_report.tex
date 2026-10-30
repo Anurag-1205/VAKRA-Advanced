@@ -1,0 +1,380 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{amsmath}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    citecolor=blue
+}
+
+\title{\textbf{VAKRA-Advanced: Tool-Using LLM Agents for\\ Multi-Hop, Multi-Source Reasoning} \\[0.3em]
+\large Phase 1 Report --- Environment, Baseline, and Diagnostics}
+\author{Anurag Kaushal \and Aayush Pandey \and Piyush Agarwal}
+\date{October 30, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report covers Phase 1 of our course project built around \emph{VAKRA-Advanced}, a SemEval
+2027 shared task on tool-using LLM agents. The task requires an agent to select among large
+catalogs of APIs, chain calls across multiple hops, retrieve evidence from documents when APIs
+are insufficient, respect natural-language tool-use policies, and produce an answer grounded in
+what the tools returned. We report on reproducing the official benchmark environment, defining
+evaluation splits, running the unmodified reference agent as a baseline on the two
+capabilities we prioritize (tool selection and multi-hop API reasoning), and measuring where
+that baseline succeeds and fails. We also report offline retrieval diagnostics that quantify how
+much of the baseline's error is attributable to tool shortlisting versus reasoning, and
+descriptive statistics of the dataset that motivate our Phase 2 design choices. We close with
+the obstacles encountered, how they were resolved, and the scope and schedule for the remainder
+of the project.
+\end{abstract}
+
+\section{Introduction}
+
+VAKRA-Advanced evaluates systems that answer complex natural-language requests by interacting
+with external tools and information sources rather than relying solely on a language model's
+parametric knowledge. An agent must identify which of potentially hundreds of APIs is relevant,
+supply valid arguments, chain the output of one call into the input of the next, retrieve
+supporting passages from document collections when APIs alone are insufficient, follow
+natural-language policies that restrict which sources may be used, and finally produce an answer
+that is verifiably grounded in the evidence it collected.
+
+The appeal of this task, from an information retrieval standpoint, is that tool selection and
+document retrieval are themselves retrieval problems: given a query, rank a catalog of
+candidates (tools, or passages) and surface the ones that are actually needed. The project
+proposal accordingly set a two-phase plan: a first phase that establishes a working baseline for
+tool selection and multi-hop API reasoning, and a second phase that improves reliability, adds
+document retrieval and policy handling, and produces a comparative evaluation. This report
+documents what we completed in Phase 1.
+
+\subsection{Scope of this report}
+
+Phase 1 work has been about understanding the benchmark precisely enough to run it faithfully,
+establishing a reproducible baseline, and measuring where that baseline loses points. This report
+intentionally stays at that level: it describes \emph{what} was measured and \emph{what} it
+means for the rest of the project, not how our code is organized internally. Implementation
+details (module layout, scripts, configuration flags) are omitted; they are documented
+separately for the team's own use.
+
+\section{Task Description}
+
+VAKRA-Advanced is organized into four capabilities, each stressing a different part of
+tool-using reasoning. Table~\ref{tab:capabilities} summarizes them along with the size of the
+official test partition.
+
+\begin{table}[h!]
+\centering
+\caption{The four VAKRA-Advanced capabilities.}
+\label{tab:capabilities}
+\begin{tabular}{@{}cp{3.2cm}p{6.5cm}r@{}}
+\toprule
+\# & Capability & What the agent must do & Test size \\
+\midrule
+1 & API Chaining & Compose generic data operations (filter, sort, aggregate, \ldots) over a
+dataset handle & 2{,}077 items / 54 domains \\
+2 & Tool Selection & Pick the one correct endpoint out of 6--328 candidate tools (116 on
+average) and fill its arguments & 1{,}597 items / 17 domains \\
+3 & Multi-hop API Reasoning & Chain endpoint calls, where an earlier output becomes a later
+input, for up to 5 hops & 869 items / 38 domains \\
+4 & Multi-hop, Multi-source + Policies & Mix API calls and document retrieval across multi-turn
+dialogues while obeying a tool-use policy & 644 items / 41 domains \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Scoring re-executes an agent's submitted tool calls against the live benchmark environment and
+judges only the \emph{last turn} of each dialogue. A turn is scored, in order, by: (i) a policy
+judge (Capability 4 only) that fails any violation outright; (ii) an exact-match check against
+the ground-truth tool responses; (iii), failing that, a correctness judge that compares the
+submitted answer with the gold answer; and (iv) a groundedness judge that checks the answer is
+supported by the agent's own tool outputs. A dialogue whose gold answer is "I cannot answer"
+scores full credit if the agent makes no tool call at all. This scoring design has two
+consequences that shape our approach: reproducing the ground-truth tool \emph{responses} is the
+most reliable path to a correct score, so getting the right tool and arguments matters more than
+producing polished prose; and a deliberate, well-calibrated refusal is a legitimate and rewarded
+strategy, not a fallback.
+
+Following the project proposal's priority order, we scope Phase 1 around Capabilities 2 and 3
+(tool selection and multi-hop API reasoning), treat Capability 4 (multi-source with policies) as
+conditional on the availability of a suitably resourced machine, and defer Capability 1 (API
+chaining) to later in the project.
+
+\section{Approach}
+
+Our agent follows the modular design proposed at the outset of the project: a request
+interpreter extracts the goal, entities and constraints of a query; a tool retriever narrows a
+domain's full catalog down to a shortlist relevant to that query; a planner / tool selector picks
+the next call and its arguments from that shortlist; an execution engine validates and runs the
+call against the benchmark environment and classifies any error; a state and evidence store
+threads identifiers and intermediate results from one call to the next; and an answer generator
+produces a final response using only the evidence that has been collected, never from the
+model's own prior knowledge. For Capability 4, this design is extended with document retrieval
+and a policy component that can remove tools the active policy forbids, or trigger a deliberate
+abstention.
+
+For Phase 1, our objective was not yet to improve on this design, but to stand up the official
+reference implementation faithfully, verify that our understanding of the environment and
+scoring rules is correct, and use the reference agent's own behavior as the baseline against
+which every later improvement is measured.
+
+\section{Experimental Setup}
+
+\subsection{Environment}
+
+The benchmark environment ships as a set of containerized services, one per capability, backed
+by real relational databases and, for Capability 4, a document index. We verified this
+environment end to end: data download, service startup, the tool catalogs each capability
+exposes, and the official scoring pipeline, which replays an agent's tool calls against the live
+services rather than trusting whatever the agent reports. We reproduced this setup independently
+on a second machine to confirm it was not specific to one environment, and that is also where our
+Capability 4 service runs, since it needs more memory than our primary development machine has
+available.
+
+\subsection{Data splits}
+
+We defined a fixed set of evaluation splits over the publicly available training data, held out
+by \emph{domain} rather than by item, so that development never leaks information about the
+domains a held-out evaluation will be scored on. A small \texttt{smoke} split supports quick
+sanity checks after any change; \texttt{dev-seen} and \texttt{dev-heldout} support fast
+iteration and model selection respectively; and a fixed, domain-stratified \texttt{dev-eval}
+subset of \texttt{dev-heldout} is the split all baseline and comparison numbers in this report
+are drawn from, chosen to be large enough to be informative while cheap enough to score within
+our LLM provider's budget.
+
+\subsection{Models}
+
+The agent and the scoring judge both use the same open-weights model specified by the official
+benchmark, reached through a commercial inference provider; the judge model is never changed
+across experiments, so that no result in this report is self-graded. Both the agent and judge
+are run at temperature zero. The provider, model and relevant settings are recorded with every
+run so that later comparisons are made only within a fixed model configuration.
+
+\subsection{Diagnostics}
+
+Beyond the official score, we separately measure whether a shortlist of candidate tools actually
+contains the ground-truth tool for a query (an information-retrieval metric, independent of any
+LLM call), and we break down scored and unscored items into categories --- correct via exact
+match, correct via the answer judge, wrong, erroring, or ungrounded --- so that a single
+aggregate score does not hide \emph{why} items are lost.
+
+\section{Results}
+
+\subsection{Baseline score on \texttt{dev-eval}}
+
+Table~\ref{tab:baseline} reports the official score of the unmodified reference agent on
+\texttt{dev-eval}, under two tool-shortlist sizes: the benchmark's own default of 128 candidate
+tools per call, and a reduced shortlist of 32, which we also measure because it is the
+configuration a free-tier LLM budget can afford.
+
+\begin{table}[h!]
+\centering
+\caption{Baseline (reference agent) score on \texttt{dev-eval}. 95\% confidence half-widths are
+approximately $\pm0.09$ (Cap 2), $\pm0.16$ (Cap 3) and $\pm0.12$ (Cap 4).}
+\label{tab:baseline}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Configuration & Cap 2 ($n=120$) & Cap 3 ($n=35$) & Cap 4 ($n=60$) & Macro avg.\ (2--4) \\
+\midrule
+Default shortlist (128 tools) & 0.408 & 0.343 & 0.350\footnotemark & 0.367 \\
+Reduced shortlist (32 tools) & 0.425 & 0.171 & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+\footnotetext{0.300 if the 3 dialogues credited only because the agent crashed before making any
+tool call are excluded; see \S\ref{sec:failure}.}
+
+Two patterns stand out. First, the two shortlist sizes score within noise on Capability 2 but
+diverge sharply on Capability 3: halving the shortlist roughly halves the Capability 3 score,
+which \S\ref{sec:recall} shows is explained almost entirely by how often the shortlist still
+contains every tool a multi-hop query needs. Second, on Capability 4, nearly one in twenty
+dialogues is credited only because the agent failed outright on a question whose gold answer
+happens to be "I cannot answer" --- an artifact of how the scorer treats abstention, not a sign
+the agent is abstaining correctly. The reference agent never abstained on purpose: of the 11
+genuinely unanswerable final turns in \texttt{dev-eval}, it earned credit on none of them by
+choice.
+
+\subsection{Where items are lost}
+\label{sec:failure}
+
+Breaking each item down by how it was resolved (Table~\ref{tab:breakdown}) shows that the
+single largest source of loss on Capabilities 2 and 3 is not a reasoning failure at all: in
+roughly a fifth of items, the agent's chosen tool call is missing a required argument, and the
+inference provider rejects the call outright rather than returning it to the agent as an
+error the agent could react to. The item then ends with no trajectory and no answer. A smaller
+but consistent share of items reach the right tool responses, or even the right answer, but are
+marked wrong because the answer is judged unsupported by the agent's own evidence ("ungrounded").
+Capability 4 has its own dominant failure mode: about one in six dialogues carries so much
+conversation history that no request can fit the model's context window at all, regardless of
+how many tools are offered.
+
+\begin{table}[h!]
+\centering
+\caption{Outcome breakdown on \texttt{dev-eval}, as a share of items.}
+\label{tab:breakdown}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Outcome & Cap 2 (128) & Cap 2 (32) & Cap 3 (128) & Cap 3 (32) \\
+\midrule
+Correct via exact match & 37.5\% & 39.2\% & 31.4\% & 17.1\% \\
+Correct via answer judge & 3.3\% & 3.3\% & 2.9\% & --- \\
+Wrong or no answer & 25.8\% & 30.0\% & 40.0\% & 42.9\% \\
+Tool call rejected (missing argument) & 22.5\% & 20.0\% & 17.1\% & 17.1\% \\
+Right tool response, ungrounded answer & 10.0\% & 6.7\% & 2.9\% & 11.4\% \\
+Right answer, ungrounded & --- & --- & 5.7\% & 11.4\% \\
+Context too long & 0.8\% & 0.8\% & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On Capability 4 (default shortlist, $n=60$ dialogues): 28.3\% correct via exact match, 1.7\%
+correct via the answer judge, 5.0\% credited only due to an agent crash on an unanswerable item,
+30.0\% wrong or with no answer, 16.7\% lost to context length, 11.7\% with the right tool
+responses but an ungrounded answer, 5.0\% with the right answer but ungrounded, and 1.7\% timed
+out.
+
+\subsection{Tool retrieval: does the shortlist contain the right tool?}
+\label{sec:recall}
+
+Independent of any LLM call, we measured whether a candidate shortlist --- built purely from
+matching a query against tool names and descriptions --- actually contains every tool a query's
+gold trajectory needs, at several shortlist sizes and for three retrieval strategies: the
+benchmark's own embedding-based shortlister, a classical lexical method, and a fusion of the two.
+Table~\ref{tab:recall} reports recall at $k=32$ (the shortlist size our budget-constrained
+baseline uses) and at $k=128$ (the benchmark's default).
+
+\begin{table}[h!]
+\centering
+\caption{Recall of the gold tool set within the shortlist, on \texttt{dev-heldout}
+(Cap 2: 511 items; Cap 3: 35 items).}
+\label{tab:recall}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Capability & Retriever & R@32 & R@128 & MRR \\
+\midrule
+2 & Embedding (benchmark default) & 0.953 & 0.996 & 0.608 \\
+2 & Lexical & 0.928 & 0.992 & 0.486 \\
+2 & Fusion & 0.969 & 0.996 & 0.610 \\
+3 & Embedding (benchmark default) & 0.714 & 0.943 & 0.624 \\
+3 & Lexical & 0.714 & 1.000 & 0.540 \\
+3 & Fusion & 0.800 & 1.000 & 0.685 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Reducing the shortlist from 128 to 32 tools costs about 4 points of recall on Capability 2 but
+nearly 23 points on Capability 3: the multi-hop items most often need a tool that the query does
+not name directly, so a query-only shortlist misses it more often as $k$ shrinks. This recall gap
+alone explains why the reduced-shortlist baseline's Capability 3 score roughly halves relative to
+the default: a ceiling of about 0.71 on how many Capability 3 items can possibly be answered
+correctly is reached before any reasoning happens. A fused retrieval strategy recovers part of
+this gap at the same shortlist size, which motivates adopting it, together with a planning
+strategy that re-queries per hop rather than once per dialogue, as a concrete next step.
+
+\subsection{Dataset characteristics}
+
+Descriptive statistics over the public training data, gathered without any LLM calls, informed
+several of the design choices above and for Phase 2:
+
+\begin{itemize}
+\item \textbf{Capability 2 is purely a selection problem}: every item requires exactly one tool
+call, over catalogs with a median of about 105 tools and up to 283; in 12 of 40 domains, even the
+benchmark's own default shortlist size of 128 tools does not cover the full catalog.
+\item \textbf{Capability 3 is almost always exactly two hops} (90\% of items), which supports a
+plan-then-act strategy built around two retrieval and execution steps rather than an open-ended
+search.
+\item \textbf{Capability 1 requires long chains}: 60\% of its items need three or more chained
+operations, which is where carrying state (identifiers and intermediate results) between steps
+matters most.
+\item \textbf{Capability 4 is mostly API calls}: only about 3\% of training turns, and 7\% of
+\texttt{dev-eval} turns, call a document retriever at all, and always alongside an API call, not
+instead of one.
+\item \textbf{Abstention is a policy problem, not a knowledge problem}: every "I cannot answer"
+turn occurs in a dialogue governed by a tool-use policy, and 96\% of them require no tool call at
+all. Because only the final turn of each dialogue is scored, and every such turn is a final turn,
+about 18\% of \texttt{dev-eval} dialogues are decided entirely by whether the agent abstains
+correctly --- a substantial, currently unclaimed share of the Capability 4 score.
+\item \textbf{A handful of dialogues cannot fit in context at all}: about one in six
+\texttt{dev-eval} dialogues carries several million characters of prior-turn history, which
+exceeds the model's context window regardless of how the agent is configured.
+\end{itemize}
+
+\section{Obstacles and How They Were Resolved}
+
+Phase 1 surfaced several practical obstacles, each of which shaped a design or scheduling
+decision rather than being a simple bug fix:
+
+\begin{itemize}
+\item \textbf{Free-tier inference limits did not fit the benchmark's own default request size.}
+A single default-configuration request for Capabilities 1--3 exceeds a typical free-tier
+per-minute token budget on the held-out domains we evaluate on, and a reduced shortlist that does
+fit the per-minute budget still runs into a much smaller daily token budget, sufficient for only
+a few dozen scored items per day. We resolved this by moving to a paid tier of the same provider
+for all reported baseline numbers, after first confirming (\S\ref{sec:recall}) that a free-tier
+configuration would have scored on a biased, retrieval-limited basis rather than reflecting
+agent reasoning.
+\item \textbf{A second candidate LLM provider proved incompatible with multi-step tool use}
+through our intended client path, rejecting the second call of any tool-calling sequence. We
+deferred that provider to a possible secondary experiment series rather than blocking the
+primary one on it.
+\item \textbf{Capability 4's document index requires more memory than our primary development
+machine has.} We resolved this by running Capability 4 exclusively on a second, better-resourced
+machine, which also served as our reproducibility check for the rest of the environment.
+\item \textbf{Capability 1's data for our training-domain evaluation needed a lookup table that
+the benchmark's own tooling only generates for its restricted test domains.} We generated the
+missing entries ourselves following the same rule the benchmark uses, which unblocked
+Capability 1 evaluation on our splits.
+\end{itemize}
+
+\section{Discussion and Implications for Phase 2}
+
+The Phase 1 measurements point to concrete, low-ambiguity targets for the next phase, in order of
+expected impact:
+
+\begin{enumerate}
+\item \textbf{Argument validation and repair.} Since roughly a fifth of all Capability 2--3
+items are lost to a rejected tool call rather than a wrong one, giving the agent a chance to see
+and correct a malformed call before giving up should recover a meaningful share of score without
+touching tool selection at all.
+\item \textbf{Better tool shortlisting for multi-hop queries.} The retrieval ceiling identified
+in \S\ref{sec:recall} bounds Capability 3 before any reasoning occurs; a fused retrieval
+strategy, combined with re-querying at each hop instead of once per dialogue, directly targets
+this.
+\item \textbf{Grounded answer generation.} A consistent share of items reach correct or
+near-correct tool evidence but fail the groundedness check; constraining the final answer to
+only cite collected evidence should reduce this independently of items (1) and (2).
+\item \textbf{Deliberate abstention for Capability 4.} Since abstention correctness alone decides
+roughly a sixth of Capability 4 dialogues, and the baseline currently never abstains on purpose,
+a policy-aware guard that can recognize when the only viable tool is forbidden is a
+high-value, self-contained addition.
+\item \textbf{History truncation for Capability 4.} A minority of dialogues are unanswerable
+purely because of an oversized conversation history; trimming prior-turn content that the current
+question does not need should make these dialogues answerable at all.
+\end{enumerate}
+
+Capability 1 remains out of scope for the course deadline given the time available, and is
+recorded as future work; Capability 4 proceeds conditionally, since the resourcing obstacle
+described above has already been resolved.
+
+\section{Conclusion}
+
+Phase 1 established that the official VAKRA-Advanced benchmark environment, scoring pipeline and
+reference agent can be reproduced faithfully on our infrastructure, produced a baseline score on
+a fixed evaluation subset for Capabilities 2--4, and --- more importantly for planning the rest
+of the project --- decomposed that baseline's error into causes that are each independently
+addressable: a provider-side validation failure that is unrelated to reasoning quality, a
+retrieval ceiling that bounds multi-hop performance before any reasoning occurs, an unclaimed
+groundedness gap, and an unclaimed abstention opportunity. These findings directly set the
+priorities for Phase 2's planned improvements and the comparison we intend to report at the end
+of the course project.
+
+\end{document}
