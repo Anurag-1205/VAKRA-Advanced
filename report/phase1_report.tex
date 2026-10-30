@@ -54,7 +54,7 @@ Selection is always a single tool call; Multi-hop questions are almost always ex
 (90\%); API Chaining questions often need 3 or more chained calls (60\%); and multi-source
 conversations rarely need document retrieval at all ($\sim$3--7\% of turns), always alongside an
 API call. Running one baseline configuration on \texttt{dev-eval}, agent and judge calls
-included, cost about \$1--2 in language-model usage.
+included, one call to \texttt{Groq-api} costs about \$1.
 
 \begin{table}[h!]
 \centering\small
@@ -72,23 +72,33 @@ $\pm0.16$ (Cap 3), $\pm0.12$ (Cap 4).}
 \vspace{-0.5em}
 \end{table}
 
-\textbf{Findings.}
+\textbf{Findings and Next Steps.}
 \begin{itemize}
-\item \textbf{Retrieval, not reasoning, bounds Capability 3.} With a shortlist of 32 tools, the
-correct tool set is present for only 71\% of Capability 3 questions, versus 94\% with 128 tools;
-a combined (lexical + embedding) retrieval method recovers part of this, reaching 80\% at the
-same shortlist size. This gap alone explains why the 32-tool baseline score is roughly half the
-128-tool score on Capability 3, while Capability 2 is barely affected.
+\item \textbf{A short tool shortlist bounds Capability 3 by retrieval, not reasoning.} With only
+32 candidate tools, the correct tool set is present for just 71\% of Capability 3 questions,
+versus 94\% with 128; this gap alone explains why a 32-tool run scores roughly half of a
+128-tool run on Capability 3, while Capability 2 is barely affected. A combined (lexical
++ embedding) retrieval method recovers part of the gap at 32 tools (80\%), and remains
+useful for keeping shortlists small and cheap even without a hard tool limit.
 \item \textbf{About a fifth of Capability 2--3 questions fail before reasoning even matters.} The
 agent's tool call is missing a required input, and the service rejects the call outright instead
 of giving the agent a chance to fix it.
-\item \textbf{7--23\% of questions reach the right tool results or the right answer but are still
-marked wrong}, because the answer is judged as not properly backed up by that evidence.
-\item \textbf{Deliberate refusal is a missed opportunity on Capability 4.} About 18\% of
-\texttt{dev-eval} conversations are decided purely by whether the agent correctly says "I cannot
-answer"; the baseline agent never does this on purpose.
+\item \textbf{Questions get the tool calls and the facts right, but still score 0: about 7\% on
+Capability 2, up to 23\% on Capability 3.} The agent calls the correct tool(s) and its final
+answer matches the expected one, but the
+evaluator's groundedness check fails it anyway, because the answer text does not clearly cite or
+restate the values returned by those tool calls -- e.g.\ it states a number without tying it to
+the figure the tool actually returned. This is not a tool-selection or reasoning failure, but
+a problem of not presenting the evidence clearly in the final answer.
+\item \textbf{The baseline never refuses on purpose, even when refusing is the correct answer.}
+In about 18\% of Capability 4 conversations, the policy rules out every tool that could answer
+the last question, so the only correct response is to say "I cannot answer" and make no tool
+call at all -- doing this earns full credit. The baseline agent always tries to answer anyway, so
+it loses score on every one of these questions. Adding a check for "is the needed tool actually
+allowed here?" before answering should let us fix this problem.
 \item \textbf{About 17\% of Capability 4 conversations are simply too long} for the language
-model to process at all, regardless of how many tools are offered.
+model to process at all. These are conversations where earlier turns carry very long answers.
+They become too long to fit within any model's context window, independent of how many tools are being offered.
 \end{itemize}
 
 \end{document}
