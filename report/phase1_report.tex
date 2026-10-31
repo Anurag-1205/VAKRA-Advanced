@@ -1,101 +1,130 @@
 \documentclass[10pt]{article}
 
-\usepackage[margin=0.7in]{geometry}
+\usepackage[margin=0.5in,top=0.55in,bottom=0.42in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
 \usepackage{booktabs}
 \usepackage{array}
-\usepackage{hyperref}
 \usepackage{enumitem}
-\setlist{nosep, leftmargin=1.4em}
-\setlength{\parskip}{0.3em}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+
+\setlist{nosep, leftmargin=1.2em}
+\setlength{\parskip}{0.2em}
 \setlength{\parindent}{0pt}
+\setlength{\tabcolsep}{4pt}
 \pagestyle{empty}
-
-\title{\vspace{-2em}\textbf{\large VAKRA-Advanced: Tool-Using LLM Agents for Multi-Hop,
-Multi-Source Reasoning}\\[0.2em] \normalsize Phase 1 Report --- Environment, Baseline, and
-Diagnostics}
-\author{\small Anurag Kaushal (\texttt{2025202013}) \quad Aayush Pandey (\texttt{2025201058})
-\quad Piyush Agarwal (\texttt{2025201082})}
-
-\date{}
+\frenchspacing
+\titleformat{\section}{\normalsize\bfseries}{\thesection.}{0.4em}{}
+\titlespacing*{\section}{0pt}{0.55em}{0.1em}
 
 \begin{document}
-\maketitle
-\vspace{-1.5em}
 
-\textbf{Task.} VAKRA-Advanced (SemEval 2027) is about building an agent that answers a question
-by using external tools -- picking the right one, filling in its inputs, and chaining calls when
-one tool's output feeds another -- instead of just answering from what a language model already
-"knows". Sometimes it must also pull in supporting text from documents. The benchmark has four such capabilities: Tool Selection, Multi-hop API
-Reasoning, API Chaining, and Multi-source reasoning with policies. An answer is checked by
-re-running the agent's tool calls and judging whether the result and final answer match
-what was expected and are backed up by evidence; a correct, honest refusal also counts as fully
-correct. Our project takes up Tool Selection and Multi-hop API Reasoning first, the
-multi-source/policy capability if compute allows, and API Chaining later.
+\begin{center}
+{\fontsize{13}{16}\selectfont\bfseries VAKRA-Advanced: Tool-Using LLM Agents for Multi-Hop, Multi-Source Reasoning}\\[0.4em]
+{\normalsize Phase 1 Report: Baseline and Diagnosis}\\[0.4em]
+{\small Anurag Kaushal (2025202013) \quad Aayush Pandey (2025201058) \quad Piyush Agarwal (2025201082)}
+\end{center}
+\vspace{-0.2em}
 
-\textbf{Phase 1 work.} Phase 1 was about setting everything up correctly and measuring where
-things stand today, before changing anything. We got the official benchmark running-- its databases and
-tools included. We
-then fixed a set of evaluation groups, held out by domain so that results are never just
-memorizing seen data, including one representative slice, \texttt{dev-eval}, used for every
-number below so that all comparisons are on exactly the same questions. On this slice, we ran the
-benchmark's own ready-made agent, unchanged, as our baseline, once with the full list of
-candidate tools per question (up to 128, the benchmark's default). 
+\section{Task, baseline agent and scoring}
+VAKRA-Advanced (SemEval-2027 Task 11) asks an agent to answer questions by calling tools in a
+live environment: 8,000+ APIs over real databases in 62 domains, plus document collections.
+There are four capabilities: (1) chaining generic data operations, (2) selecting the right
+endpoint, (3) multi-hop API reasoning, and (4) multi-turn dialogues that mix APIs and documents
+under tool-use policies. The official baseline, a LangGraph ReAct agent, faces up to 288 tools
+per domain, so it first \emph{shortlists} them: it embeds the question and each tool's
+\texttt{name: description} with MiniLM and gives the LLM only the top $k$ ($k{=}128$ by default).
+The evaluator replays the agent's tool calls and scores the final turn 0/1. The answer must
+reproduce the gold tool responses or satisfy an LLM judge, and a second judge must find it
+grounded in the tool outputs. A correct refusal with no tool call also scores.
 
-\textbf{Scale and cost.} The benchmark spans 1,300--1,900 training questions per capability
-across 28--40 domains, with tool catalogs of 6--328 tools per domain (median $\sim$105). Tool
-Selection is always a single tool call; Multi-hop questions are almost always exactly two hops
-(90\%); API Chaining questions often need 3 or more chained calls (60\%); and multi-source
-conversations rarely need document retrieval at all ($\sim$3--7\% of turns), always alongside an
-API call. Running one baseline configuration on \texttt{dev-eval}, agent and judge calls
-included, one call to \texttt{Groq-api} costs about \$1.
+\section{What we did}
+We run the official environment, agent and evaluator unmodified, and scores reproduce exactly
+on two machines. To test on unseen domains we hold out nine domains from \emph{every}
+capability, since Capabilities 2--4 share each domain's tools and a per-capability hold-out
+would leak them. Everything is scored on \texttt{dev-eval}, a fixed,
+domain-stratified sample of these held-out domains: 60/120/35/60 items for Capabilities 1--4.
+The training data set our priorities: every Capability~2 item is a single call, 90\% of
+Capability~3 items are exactly two hops, and in 15\% of Capability~4 dialogues the only correct
+final answer is a refusal.
 
-\begin{table}[h!]
-\centering\small
-\vspace{-0.3em}
-\begin{tabular}{@{}lrrr@{}}
+Getting a usable model took longer than planned. Groq's free tier rejected every request, since
+128 tool descriptions alone need 11--14K tokens against its 8K tokens/minute limit. Gemini~3
+failed at the second tool call, because LangChain drops the ``thought signature'' Gemini
+requires. We settled on \texttt{gpt-oss-120b} on Groq's paid tier at temperature~0. The three
+baseline runs cost \$2.00, judge included.
+
+\vspace{0.2em}
+\begin{minipage}[t]{0.40\textwidth}
+\vspace{0pt}\centering\small
+\begin{tabular}{@{}lccc@{}}
 \toprule
-Configuration & Cap 2 ($n{=}120$) & Cap 3 ($n{=}35$) & Cap 4 ($n{=}60$) \\
+& Cap 2 & Cap 3 & Cap 4 \\
+ & ($n{=}120$) & ($n{=}35$) & ($n{=}60$) \\
 \midrule
-Default shortlist (128) & 0.408 & 0.343 & 0.350 \\
-Reduced shortlist (32)  & 0.425 & 0.171 & --- \\
+Score   & 0.408 & 0.343 & 0.350$^{\ast}$ \\
+\midrule
+95\% CI & $\pm$0.09 & $\pm$0.16 & $\pm$0.12 \\
 \bottomrule
-\end{tabular}
-\caption{\small Baseline score on \texttt{dev-eval}. 95\% CI half-widths $\approx\pm0.09$ (Cap 2),
-$\pm0.16$ (Cap 3), $\pm0.12$ (Cap 4).}
-\vspace{-0.5em}
-\end{table}
+\end{tabular}\\[0.15em]
+{\footnotesize \textbf{Table 1.} Official baseline ($k{=}128$) on \texttt{dev-eval}.
+$^{\ast}$0.300 without 3 dialogues credited after the agent crashed.}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.57\textwidth}
+\vspace{0pt}\centering\small
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+Cap & Retriever & R@10 & R@32 & R@128 & MRR \\
+\midrule
+2 & Dense (MiniLM, baseline) & \textbf{.879} & .953 & \textbf{.996} & .608 \\
+  & BM25                     & .779 & .928 & .992 & .486 \\
+  & Hybrid (RRF)             & .875 & \textbf{.969} & \textbf{.996} & \textbf{.610} \\
+\midrule
+3 & Dense (MiniLM, baseline) & .343 & .714 & .943 & .624 \\
+  & BM25                     & \textbf{.371} & .714 & \textbf{1.00} & .540 \\
+  & Hybrid (RRF)             & .314 & \textbf{.800} & \textbf{1.00} & \textbf{.685} \\
+\bottomrule
+\end{tabular}\\[0.15em]
+{\footnotesize \textbf{Table 2.} Tool retrieval on all held-out items (511 / 35).}
+\end{minipage}
 
-\textbf{Findings and Next Steps.}
+\vspace{0.3em}
+\textbf{Shortlisting as retrieval.} We treat shortlisting as ad-hoc retrieval. Each tool's
+\mbox{\texttt{name: description}} is a document and the user's question is the query. An item
+counts at $k$ only if \emph{all} its gold tools are in the top $k$, so recall@$k$ caps the agent's
+score. We
+compare the dense retriever with BM25 ($k_1{=}1.5$, $b{=}0.75$) and their reciprocal-rank fusion
+(constant 60).
+
+\section{What we found}
 \begin{itemize}
-\item \textbf{A short tool shortlist bounds Capability 3 by retrieval, not reasoning.} With only
-32 candidate tools, the correct tool set is present for just 71\% of Capability 3 questions,
-versus 94\% with 128; this gap alone explains why a 32-tool run scores roughly half of a
-128-tool run on Capability 3, while Capability 2 is barely affected. A combined (lexical
-+ embedding) retrieval method recovers part of the gap at 32 tools (80\%), and remains
-useful for keeping shortlists small and cheap even without a hard tool limit.
-\item \textbf{About a fifth of Capability 2--3 questions fail before reasoning even matters.} The
-agent's tool call is missing a required input, and the service rejects the call outright instead
-of giving the agent a chance to fix it.
-\item \textbf{Questions get the tool calls and the facts right, but still score 0: about 7\% on
-Capability 2, up to 23\% on Capability 3.} The agent calls the correct tool(s) and its final
-answer matches the expected one, but the
-evaluator's groundedness check fails it anyway, because the answer text does not clearly cite or
-restate the values returned by those tool calls -- e.g.\ it states a number without tying it to
-the figure the tool actually returned. This is not a tool-selection or reasoning failure, but
-a problem of not presenting the evidence clearly in the final answer.
-\item \textbf{The baseline never refuses on purpose, even when refusing is the correct answer.}
-In about 18\% of Capability 4 conversations, the policy rules out every tool that could answer
-the last question, so the only correct response is to say "I cannot answer" and make no tool
-call at all -- doing this earns full credit. The baseline agent always tries to answer anyway, so
-it loses score on every one of these questions. Adding a check for "is the needed tool actually
-allowed here?" before answering should let us fix this problem.
-\item \textbf{About 17\% of Capability 4 conversations are simply too long} for the language
-model to process at all. These are conversations where earlier turns carry very long answers.
-They become too long to fit within any model's context window, independent of how many tools are being offered.
-\item \textbf{Capability 1 (API Chaining) was left out of Phase 1 and will be taken up next phase.} It
-asks the agent to answer a question by running a chain of simple data operations (such as
-filtering, sorting, or aggregating) one after another on a dataset, where each step builds on
-the result of the one before it. 
+\item \textbf{Shortlisting is the bottleneck for multi-hop questions.} A Capability~3 item needs
+  every hop's tool in the shortlist. At 32 tools all gold tools survive for only 71\% of
+  Capability~3 items, against 94\% at 128, because later hops are often not named in the
+  question; Capability~2 loses just 4 points. Fusing BM25 with the dense retriever raises
+  Capability~3 to 80\% at the same $k$, so smaller, cheaper shortlists stay viable.
+\item \textbf{What looked like model errors is a tool-schema bug.} 22.5\% of Capability~2 and
+  17.1\% of Capability~3 items end with the API rejecting a tool call for a missing argument.
+  We first read these as model mistakes, but in every rejected call we inspected the missing
+  argument was the same internal field. For ``Which car is the cheapest?'' the model correctly called
+  \texttt{get\_cheapest\_car\_details} with no arguments. For tools without parameters, though,
+  the official wrapper passes no schema, so LangChain generates one with a required internal
+  \texttt{config} field, and Groq's strict validation rejects the correct call. The loss rates
+  match the share of items whose gold chain uses such a tool: 19.2\% and 20.0\%.
+\item \textbf{Correct work still scored 0.} 10.0\%, 8.6\% and 16.7\% of Capability 2/3/4 items
+  produce the right tool outputs or answer but fail the groundedness judge. In one case the
+  agent produced every gold response, then answered from a later call that had dropped the
+  question's ``1975'' and ``USA'' filters.
+\item \textbf{Two Capability~4 losses are about context and policy, not tools.} 17\% of dialogues carry 1.9--9.7\,M
+  characters of earlier answers and fit no context window. The agent never refused on purpose:
+  0 of the 11 dialogues that require it.
 \end{itemize}
+
+\textbf{Scope.} Every comparison uses the same items, model and official judge, and we report 95\%
+intervals so that only large differences count as findings. Scores are on held-out
+\emph{training} domains; access to the official test split has been requested. Because the
+schema bug lowers the baseline, fixing it gives a measurable first gain. Capability~1 is next.
 
 \end{document}
