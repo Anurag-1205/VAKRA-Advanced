@@ -5,12 +5,14 @@ point upstream's CAPABILITY_<N>_DIR at it, and invoke third_party/vakra/benchmar
 Predictions land in runs/<run_id>/output/<cap_dir>/<domain>.json (official format).
 
 V2 (--retriever bm25|hybrid) is the same agent with our tool shortlist (scripts/retrieval.py)
-patched in at run time; upstream's code is not modified.
+patched in at run time; upstream's code is not modified. --fix-tool-schema adds the
+zero-parameter tool-schema fix (SCHEMA_PATCH) to either.
 
 Usage:
     python scripts/run_baseline.py --split smoke --caps 1 2 3
     python scripts/run_baseline.py --split dev-heldout --caps 2 --max-per-domain 3
     python scripts/run_baseline.py --split dev-eval --caps 2 3 --retriever hybrid --top-k-tools 50
+    python scripts/run_baseline.py --split dev-eval --caps 2 3 --retriever hybrid --fix-tool-schema
 """
 import argparse
 import json
@@ -58,6 +60,24 @@ Shortlister.retriever = {retriever!r}
 agents.agent_interface.ToolShortlister = Shortlister
 """
 
+# Tool-schema fix (--fix-tool-schema). For a tool with no parameters, upstream's
+# MCPToolWrapper._convert_json_schema_to_pydantic returns None, so LangChain infers a schema
+# from the wrapper's (**kwargs) function and sends the LLM an `args` array, a required
+# `config` (LangChain's RunnableConfig, with its whole docstring) and `kwargs`. Groq then
+# rejects the model's correct `{{}}` call with HTTP 400 ("missing properties: 'config'" or
+# "`/args`: expected array, but got null"). Here such a tool gets an explicit empty schema,
+# which the LLM sees as {{"properties": {{}}, "type": "object"}}. Tools with parameters are
+# unchanged, as are prompts, the tool calls sent to the MCP server and the agent logic.
+SCHEMA_PATCH = """
+from pydantic import create_model
+from agents.mcp_tool_wrapper import MCPToolWrapper
+_to_pydantic = MCPToolWrapper._convert_json_schema_to_pydantic
+def _to_pydantic_or_empty(self, tool_name, input_schema):
+    model = _to_pydantic(self, tool_name, input_schema)
+    return model if model is not None else create_model(f"{{tool_name}}Input")
+MCPToolWrapper._convert_json_schema_to_pydantic = _to_pydantic_or_empty
+"""
+
 
 def git_sha(path: Path) -> str:
     """Short HEAD sha, suffixed '-dirty' when tracked files have local changes."""
@@ -99,6 +119,8 @@ def main() -> int:
     ap.add_argument("--top-k-tools", type=int, default=128, help="upstream default is 128")
     ap.add_argument("--retriever", default="minilm", choices=RETRIEVERS,
                     help="tool shortlist ranking: minilm is upstream's (V0); bm25 or hybrid is V2")
+    ap.add_argument("--fix-tool-schema", action="store_true",
+                    help="give zero-parameter tools an empty schema instead of LangChain's inferred one")
     ap.add_argument("--max-iterations", type=int, default=None)
     ap.add_argument("--llm-max-retries", type=int, default=None,
                     help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
@@ -108,6 +130,7 @@ def main() -> int:
     # The backend is part of the run id: results from different agent models are
     # separate experiment series and must never be pooled (SPEC §7.3).
     variant = "v0" if args.retriever == "minilm" else f"v2{args.retriever}"
+    variant += "fix" if args.fix_tool_schema else ""
     variant += "" if args.top_k_tools == 128 else f"k{args.top_k_tools}"
     run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
@@ -119,6 +142,7 @@ def main() -> int:
         "run_id": run_id,
         "variant": ("V0 upstream LangGraphReActAgent" if args.retriever == "minilm"
                     else f"V2 upstream LangGraphReActAgent + {args.retriever} tool shortlist")
+                   + (" + tool-schema fix" if args.fix_tool_schema else "")
                    + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
@@ -129,6 +153,7 @@ def main() -> int:
         "base_url": env["OPENAI_BASE_URL"],
         "top_k_tools": args.top_k_tools,
         "retriever": args.retriever,
+        "fix_tool_schema": args.fix_tool_schema,
         "max_iterations": args.max_iterations,
         "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
@@ -151,6 +176,8 @@ def main() -> int:
             patches.append(RETRY_PATCH.format(max_retries=args.llm_max_retries))
         if args.retriever != "minilm":
             patches.append(RETRIEVER_PATCH.format(scripts_dir=str(SCRIPTS_DIR), retriever=args.retriever))
+        if args.fix_tool_schema:
+            patches.append(SCHEMA_PATCH)
         runner = ["-c", SHIM.format(patches="".join(patches))] if patches else ["benchmark_runner.py"]
         cmd = [
             sys.executable, *runner,
