@@ -42,7 +42,9 @@ needs a review from someone other than its author.
 Weeks start on Mondays. Course milestones:
 
 - **Midterm checkpoint: Saturday 2026-10-31.**
-- **Final submission: Sunday 2026-11-15**, all course deliverables. Code freezes on 2026-11-12.
+- **Final submission: Sunday 2026-11-15**, all course deliverables.
+- **Code freeze: end of Friday 2026-11-13**, our own milestone. It was moved from Nov 12 on
+  2026-11-09; see [POST_MID_WORK.md](POST_MID_WORK.md).
 
 **Evaluation subset `dev-eval`:** a fixed, domain-stratified sample of `dev-heldout`. It
 contains about 120 Cap 2 items and all 35 Cap 3 items, plus about 60 Cap 4 items if Cap 4 is in
@@ -98,15 +100,17 @@ costs about one day of quota. Development iterates on `smoke`.
 - [ ] **C:** `diagnostics.py` on top of traces. If Cap 4 is in scope: document retrieval,
   policy guard and abstention (V6).
 
-**Stage 3: Experiments and analysis (Mon Nov 9 – Thu Nov 12)**
+**Stage 3: Experiments and analysis (Mon Nov 9 – Fri Nov 13)**
 
 - [ ] **All:** V1–V4 (and V6 if in scope) on `dev-eval`, one variant per day of quota.
 - [ ] **B:** retriever ablations (offline, no LLM cost).
 - [ ] **C:** error taxonomy over failed items, about 20 per capability, with representative
   success and failure traces.
-- [ ] **Thu Nov 12:** code freeze. Only bug fixes for reported numbers after this.
+- [ ] **Fri Nov 13 (end of day):** code freeze, moved from Thu Nov 12 on 2026-11-09. No new
+  features after this. A bug fix that changes a reported number is allowed, and the affected run
+  is redone.
 
-**Stage 4: Report and submission (Fri Nov 13 – Sun Nov 15)**
+**Stage 4: Report and submission (Sat Nov 14 – Sun Nov 15)**
 
 - [ ] **All:** results table, ablation table, error analysis and limitations written up. The
   report skeleton (design and method sections) should be drafted from Nov 9, in parallel with
@@ -260,7 +264,7 @@ allows. V6 only if Cap 4 is in scope ([§1](#1-objectives)). V7 is dropped.
 | Upstream repo changes mid-project | Medium | Medium | Pin the commit; bump only deliberately and re-run V1 parity |
 | Evaluator LLM judge is noisy | Medium | Low | Fixed judge model; report CIs; inspect disagreements by hand |
 | Holiday period clashes with the January evaluation window | Medium | Medium | Freeze the config by 2027-01-03; dry-run the full pipeline before then |
-| 17 days to the 2026-11-15 deadline; one slipped stage leaves no time for the report | High | High | Scope cut in §1; fixed `dev-eval` subset; code freeze on Nov 12; report drafted from Nov 9 in parallel |
+| 17 days to the 2026-11-15 deadline; one slipped stage leaves no time for the report | High | High | Scope cut in §1; fixed `dev-eval` subset; code freeze at the end of Nov 13; report drafted from Nov 9 in parallel |
 | Free-tier quota covers about one `dev-eval` run per day | High | High | One variant per day in Stage 3; iterate on `smoke`; retriever ablations offline; fall back to Groq's paid tier if a run fails and needs repeating |
 
 ## 6. Open decisions
