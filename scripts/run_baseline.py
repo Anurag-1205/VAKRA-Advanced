@@ -4,9 +4,13 @@ For each capability: copy the split's items into runs/<run_id>/data/<cap_dir>/,
 point upstream's CAPABILITY_<N>_DIR at it, and invoke third_party/vakra/benchmark_runner.py.
 Predictions land in runs/<run_id>/output/<cap_dir>/<domain>.json (official format).
 
+V2 (--retriever bm25|hybrid) is the same agent with our tool shortlist (scripts/retrieval.py)
+patched in at run time; upstream's code is not modified.
+
 Usage:
     python scripts/run_baseline.py --split smoke --caps 1 2 3
     python scripts/run_baseline.py --split dev-heldout --caps 2 --max-per-domain 3
+    python scripts/run_baseline.py --split dev-eval --caps 2 3 --retriever hybrid --top-k-tools 50
 """
 import argparse
 import json
@@ -18,22 +22,40 @@ from pathlib import Path
 
 from common import AGENT_BACKENDS, CAPABILITIES, REPO_ROOT, RUNS_DIR, UPSTREAM, materialize_split, subprocess_env
 
+SCRIPTS_DIR = Path(__file__).resolve().parent
+RETRIEVERS = ("minilm", "bm25", "hybrid")  # as in retrieval.py, which imports upstream code
+
 DEFAULT_MODELS = {"groq": "openai/gpt-oss-120b", "gemini": "gemini-3.8-flash"}
+
+# Patches applied in the runner's process before upstream's benchmark_runner.py runs unchanged.
+SHIM = """
+import runpy, sys
+{patches}
+sys.argv[0] = "benchmark_runner.py"
+runpy.run_path("benchmark_runner.py", run_name="__main__")
+"""
 
 # Upstream create_llm builds ChatOpenAI with langchain's default max_retries=2. On Groq's
 # free tier, an HTTP 429 (tokens/minute) that outlasts two retries ends the item as an error,
-# which scores rate limiting as agent failure. This shim raises the default before running
-# upstream's runner unchanged; prompts, tools and agent logic are untouched.
-RETRY_SHIM = """
-import runpy, sys
+# which scores rate limiting as agent failure. This raises the default; prompts, tools and
+# agent logic are untouched.
+RETRY_PATCH = """
 from langchain_openai import ChatOpenAI
 _init = ChatOpenAI.__init__
 def _init_with_retries(self, *args, **kwargs):
     kwargs.setdefault("max_retries", {max_retries})
     _init(self, *args, **kwargs)
 ChatOpenAI.__init__ = _init_with_retries
-sys.argv[0] = "benchmark_runner.py"
-runpy.run_path("benchmark_runner.py", run_name="__main__")
+"""
+
+# V2: swap upstream's MiniLM shortlist for ours. Appended (not prepended) to sys.path so
+# upstream's own modules always win a name clash.
+RETRIEVER_PATCH = """
+sys.path.append({scripts_dir!r})
+import agents.agent_interface
+from retrieval import Shortlister
+Shortlister.retriever = {retriever!r}
+agents.agent_interface.ToolShortlister = Shortlister
 """
 
 
@@ -75,6 +97,8 @@ def main() -> int:
     ap.add_argument("--provider", default="openai", help="upstream create_llm provider (openai -> backend via OPENAI_BASE_URL)")
     ap.add_argument("--model", default=None, help=f"default per backend: {DEFAULT_MODELS}")
     ap.add_argument("--top-k-tools", type=int, default=128, help="upstream default is 128")
+    ap.add_argument("--retriever", default="minilm", choices=RETRIEVERS,
+                    help="tool shortlist ranking: minilm is upstream's (V0); bm25 or hybrid is V2")
     ap.add_argument("--max-iterations", type=int, default=None)
     ap.add_argument("--llm-max-retries", type=int, default=None,
                     help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
@@ -83,7 +107,8 @@ def main() -> int:
 
     # The backend is part of the run id: results from different agent models are
     # separate experiment series and must never be pooled (SPEC §7.3).
-    variant = "v0" if args.top_k_tools == 128 else f"v0k{args.top_k_tools}"
+    variant = "v0" if args.retriever == "minilm" else f"v2{args.retriever}"
+    variant += "" if args.top_k_tools == 128 else f"k{args.top_k_tools}"
     run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -92,7 +117,9 @@ def main() -> int:
 
     config = {
         "run_id": run_id,
-        "variant": "V0 upstream LangGraphReActAgent" + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
+        "variant": ("V0 upstream LangGraphReActAgent" if args.retriever == "minilm"
+                    else f"V2 upstream LangGraphReActAgent + {args.retriever} tool shortlist")
+                   + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
         "max_per_domain": args.max_per_domain,
@@ -101,6 +128,7 @@ def main() -> int:
         "model": args.model,
         "base_url": env["OPENAI_BASE_URL"],
         "top_k_tools": args.top_k_tools,
+        "retriever": args.retriever,
         "max_iterations": args.max_iterations,
         "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
@@ -118,9 +146,12 @@ def main() -> int:
         if not domains:
             print(f"[cap {cap_id}] no items in split '{args.split}', skipping")
             continue
-        runner = ["benchmark_runner.py"]
+        patches = []
         if args.llm_max_retries is not None:
-            runner = ["-c", RETRY_SHIM.format(max_retries=args.llm_max_retries)]
+            patches.append(RETRY_PATCH.format(max_retries=args.llm_max_retries))
+        if args.retriever != "minilm":
+            patches.append(RETRIEVER_PATCH.format(scripts_dir=str(SCRIPTS_DIR), retriever=args.retriever))
+        runner = ["-c", SHIM.format(patches="".join(patches))] if patches else ["benchmark_runner.py"]
         cmd = [
             sys.executable, *runner,
             "--capability_id", str(cap_id),
