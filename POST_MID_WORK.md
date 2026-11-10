@@ -25,11 +25,11 @@ Ground rules:
 
 | # | Day | Task | Owner | Depends on | Done when |
 |---:|---|---|---|---|---|
-| 1 | Mon Nov 9 | **Fix the tool-schema bug.** Tools with no parameters get a required internal `config` field, so Groq rejects correct calls. | Anurag | – | No "missing argument" rejections on `smoke` |
-| 2 | Mon Nov 9 | **V2: hybrid tool shortlist** (BM25 + MiniLM fusion), swapped into IBM's agent at run time. Run on `dev-eval` Tasks 2–3 with 128 and 50 tools. | Aayush | – | Both runs scored |
-| 3 | Mon Nov 9 | **Task 1 baseline**: V0 once on `dev-eval` Task 1 (about $0.30) | Aayush | – | Score in `results/` |
+| 1 | Mon Nov 9 | ✅ **Fix the tool-schema bug.** Tools with no parameters get a required internal `config` field, so Groq rejects correct calls. | Anurag | – | No "missing argument" rejections on `smoke` |
+| 2 | Mon Nov 9 | ✅ **V2: hybrid tool shortlist** (BM25 + MiniLM fusion), swapped into IBM's agent at run time. Run on `dev-eval` Tasks 2–3 with 128 and 50 tools. | Aayush | – | Both runs scored |
+| 3 | Mon Nov 9 | ✅ **Task 1 baseline**: V0 once on `dev-eval` Task 1 (needed the tool-refresh fix below) | Aayush | – | Score in `results/` |
 | 4 | Tue Nov 10 | **V1: our own runner and agent.** Same output format as IBM's, trace logging, includes the schema fix. | Anurag | 1 | Scores within noise of V0 (with the fix) |
-| 5 | Tue Nov 10 | **Rerun V2 on top of the schema fix**; choose the shortlist size | Aayush | 1, 2 | Size chosen, run scored |
+| 5 | Tue Nov 10 | ✅ **Rerun V2 on top of the schema fix**; choose the shortlist size | Aayush | 1, 2 | Size chosen, run scored |
 | 6 | Tue Nov 10 | **Retriever ablations**: retriever type × shortlist size (offline, no cost) | Aayush | – | Table in `results/tool_recall.md` |
 | 7 | Tue Nov 10 | **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today) | Piyush | – | No "context too long" errors on `dev-eval` Task 4 |
 | 8 | Wed Nov 11 | **V3: tool-call checking**: validate each call against its schema and repair bad arguments | Anurag | 4 | Run scored |
@@ -44,6 +44,12 @@ Ground rules:
 | 17 | Sat Nov 14 | **Final report**: results table, ablation table, error analysis, limitations | All | 15 | Report complete |
 | 18 | Sat Nov 14 | **Reproducibility check**: every number in the report links to its run id; README steps work | Aayush + Anurag | 17 | Checked |
 | 19 | **Sun Nov 15** | **Submit** | Anurag | 17, 18 | Submitted |
+
+**Status 2026-11-10:** ✅ = done. Results for #1, #2, #3 and #5 are in
+[results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md). Also done, not planned: a
+fix for upstream's stale Cap 1 tool list (`--refresh-tools`, Aayush), without which Task 1 could not
+be scored. Open question for the team: whether #4 (V1) is still needed, since the run-time patches
+in `scripts/run_baseline.py` already carry both fixes and V2.
 
 ## The same tasks, by person
 
