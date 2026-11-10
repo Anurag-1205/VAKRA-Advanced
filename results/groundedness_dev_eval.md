@@ -84,9 +84,37 @@ This is a limit of the evaluator, not of the agent, and it applies to every syst
   in Cap 2 (6 of 120). With ~10% run-to-run noise, V5 must be checked on these 35 items, plus a
   control set of currently correct items to confirm nothing breaks, not on totals alone.
 
-## A cheap test before the full run
+## Offline V5 test (2026-11-10)
 
-Rewrite the stored answers for these 35 items plus ~35 currently correct ones, replay their tool
-calls (free, local containers), and score only the groundedness judge. That is about 140 small
-LLM calls, well under $0.10. It measures V5's effect on exactly the affected items, without a
-full paid run.
+`python scripts/v5_answer_test.py --run-ids <the two runs above>`:
+
+- **Items:** the 35 items above, plus a control sample of 35 correct items with the same count per
+  capability (seed 0).
+- **Rewrite:** each item's tool calls were replayed on the local containers, and `gpt-oss-120b`
+  rewrote the final answer from that evidence only (`V5_PROMPT` in the script).
+- **Scoring:** both the original and the rewritten answers were scored with the official
+  evaluator (both judges).
+- **Runs:** `20261110-1536-v5test-orig` and `20261110-1536-v5test-v5`.
+
+| Task | Ungrounded: original re-scored | Ungrounded: V5 | Control: original re-scored | Control: V5 |
+|---|---:|---:|---:|---:|
+| 1 | 5 / 10 | 6 / 10 | 10 / 10 | 10 / 10 |
+| 2 | 0 / 11 | **6 / 11** | 10 / 11 | 11 / 11 |
+| 3 | 0 / 3 | **1 / 3** | 3 / 3 | 3 / 3 |
+| 4 | 0 / 11 | **3 / 11** | 11 / 11 | 10 / 11 |
+| **Total** | 5 / 35 | **16 / 35** | 34 / 35 | 34 / 35 |
+
+- **The effect is real on Tasks 2–4: 10 of 25 items recovered**, none of which pass when their
+  original answers are simply re-scored. On the control items, one flips each way, so there is no
+  net loss.
+- **Task 1's groundedness verdicts are mostly noise:** 5 of its 10 "ungrounded" items pass when
+  their original answers are re-scored, and V5 adds only 1. Task 1 judge results should not be
+  read item by item.
+- **Net: about +11 items of 275 (about +4 points macro)**, mostly Task 2.
+- **By cause** (V5 scoring only): extra facts 8 / 13, filter only in the arguments 4 / 12,
+  others 4 / 10.
+- **What to fix before a full run:** rule 6 ("say the information is not available") turned 2
+  right answers into refusals that fail the correctness judge (the Ford Torino count; the guessed
+  "1924"). It should only apply when the draft has no supporting tool result at all.
+- **Cost:** about $0.04 for the rewrites (125k input + 32k output tokens), plus two scoring
+  passes over 70 items.
