@@ -112,26 +112,36 @@ MCPToolWrapper._convert_json_schema_to_pydantic = _to_pydantic_or_empty
 # that run's tool calls and results only (answer_rewrite.py). The tool calls, and so the replayed
 # evidence the judges see, are unchanged. Skipped when no tool was called, so Cap 4's
 # "no tool call" refusals keep upstream's special-case credit. On a failed rewrite the draft is kept.
+# Each rewrite (query, draft, final answer) is appended to <output>/v5_drafts.jsonl, so V5's own
+# changes can be told apart from run-to-run agent noise.
 ANSWER_PATCH = """
 sys.path.append({scripts_dir!r})
-import logging
+import json, logging, os
 import agents.agent_interface
 from langchain_core.messages import HumanMessage, SystemMessage
 from answer_rewrite import V5_PROMPT, evidence_prompt
 _answer_run = agents.agent_interface.LangGraphReActAgent.run
+_drafts = os.path.join(sys.argv[sys.argv.index("--output") + 1], "v5_drafts.jsonl") if "--output" in sys.argv else None
 async def _run_with_evidence_answer(self, input, *args, **kwargs):
     response = await _answer_run(self, input, *args, **kwargs)
     if response.content and response.tool_calls:
         query = input if isinstance(input, str) else next(
             (m.content for m in reversed(input) if m.role == "user"), "")
         calls = [(c["tool_name"], c["arguments"], c["result"]) for c in response.tool_calls]
+        draft, error = response.content, None
         try:
             msg = await self._llm.ainvoke([SystemMessage(content=V5_PROMPT),
-                                           HumanMessage(content=evidence_prompt(query, calls, response.content))])
+                                           HumanMessage(content=evidence_prompt(query, calls, draft))])
             if str(msg.content).strip():
                 response.content = str(msg.content).strip()
         except Exception as e:
-            logging.getLogger("v5").warning("evidence-answer rewrite failed, keeping the draft: %r", e)
+            error = repr(e)[:300]
+            logging.getLogger("v5").warning("evidence-answer rewrite failed, keeping the draft: %s", error)
+        if _drafts:
+            os.makedirs(os.path.dirname(_drafts), exist_ok=True)
+            with open(_drafts, "a") as fh:
+                fh.write(json.dumps({{"query": query, "draft": draft, "answer": response.content,
+                                     "n_tool_calls": len(calls), "error": error}}, ensure_ascii=False) + "\\n")
     return response
 agents.agent_interface.LangGraphReActAgent.run = _run_with_evidence_answer
 """
