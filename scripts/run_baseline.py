@@ -6,7 +6,8 @@ Predictions land in runs/<run_id>/output/<cap_dir>/<domain>.json (official forma
 
 V2 (--retriever bm25|hybrid) is the same agent with our tool shortlist (scripts/retrieval.py)
 patched in at run time; upstream's code is not modified. --fix-tool-schema adds the
-zero-parameter tool-schema fix (SCHEMA_PATCH) to either.
+zero-parameter tool-schema fix (SCHEMA_PATCH) to either. --refresh-tools fixes upstream's Cap 1
+tool list going stale (see REFRESH_PATCH).
 
 Usage:
     python scripts/run_baseline.py --split smoke --caps 1 2 3
@@ -48,6 +49,34 @@ def _init_with_retries(self, *args, **kwargs):
     kwargs.setdefault("max_retries", {max_retries})
     _init(self, *args, **kwargs)
 ChatOpenAI.__init__ = _init_with_retries
+"""
+
+# Cap 1's server (RouterMCPServer) swaps its tool set when get_data switches to an item's
+# universe: generic tools (filter_data, ...) for "slot_filling" items, item-specific ones
+# (select_data_equal_to, get_<Column>s, ...) for "selection" items. Upstream's runner lists tools
+# once per domain, so on items of the other type every call is "Unknown tool" and the agent loops.
+# This re-lists the tools before each agent run (after the switch) and rebuilds the agent when
+# they changed; a no-op for Caps 2-4, whose tools never change.
+REFRESH_PATCH = """
+import agents.agent_interface, agents.mcp_tool_wrapper
+_wrappers = []
+_wrapper_init = agents.mcp_tool_wrapper.MCPToolWrapper.__init__
+def _track_wrapper(self, *args, **kwargs):
+    _wrapper_init(self, *args, **kwargs)
+    _wrappers[:] = [self]
+agents.mcp_tool_wrapper.MCPToolWrapper.__init__ = _track_wrapper
+_run = agents.agent_interface.LangGraphReActAgent.run
+async def _run_with_current_tools(self, *args, **kwargs):
+    if _wrappers:
+        wrapper = _wrappers[0]
+        tools = [wrapper._create_langchain_tool(t) for t in (await wrapper.session.list_tools()).tools]
+        if [t.name for t in tools] != [t.name for t in self._tools]:
+            self._tools = tools
+            self._agent = self._build_agent(tools)
+            if self._shortlister is not None:
+                self._shortlister.encode_tools(tools)
+    return await _run(self, *args, **kwargs)
+agents.agent_interface.LangGraphReActAgent.run = _run_with_current_tools
 """
 
 # V2: swap upstream's MiniLM shortlist for ours. Appended (not prepended) to sys.path so
@@ -122,6 +151,8 @@ def main() -> int:
     ap.add_argument("--fix-tool-schema", action="store_true",
                     help="give zero-parameter tools an empty schema instead of LangChain's inferred one")
     ap.add_argument("--max-iterations", type=int, default=None)
+    ap.add_argument("--refresh-tools", action="store_true",
+                    help="re-list tools after Cap 1's per-item universe switch (fixes an upstream runner bug)")
     ap.add_argument("--llm-max-retries", type=int, default=None,
                     help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
     ap.add_argument("--run-id", default=None, help="reuse to resume a run")
@@ -132,6 +163,7 @@ def main() -> int:
     variant = "v0" if args.retriever == "minilm" else f"v2{args.retriever}"
     variant += "fix" if args.fix_tool_schema else ""
     variant += "" if args.top_k_tools == 128 else f"k{args.top_k_tools}"
+    variant += "rt" if args.refresh_tools else ""
     run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -143,6 +175,7 @@ def main() -> int:
         "variant": ("V0 upstream LangGraphReActAgent" if args.retriever == "minilm"
                     else f"V2 upstream LangGraphReActAgent + {args.retriever} tool shortlist")
                    + (" + tool-schema fix" if args.fix_tool_schema else "")
+                   + (" + tool refresh" if args.refresh_tools else "")
                    + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
@@ -154,6 +187,7 @@ def main() -> int:
         "top_k_tools": args.top_k_tools,
         "retriever": args.retriever,
         "fix_tool_schema": args.fix_tool_schema,
+        "refresh_tools": args.refresh_tools,
         "max_iterations": args.max_iterations,
         "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
@@ -178,6 +212,8 @@ def main() -> int:
             patches.append(RETRIEVER_PATCH.format(scripts_dir=str(SCRIPTS_DIR), retriever=args.retriever))
         if args.fix_tool_schema:
             patches.append(SCHEMA_PATCH)
+        if args.refresh_tools:
+            patches.append(REFRESH_PATCH)
         runner = ["-c", SHIM.format(patches="".join(patches))] if patches else ["benchmark_runner.py"]
         cmd = [
             sys.executable, *runner,
