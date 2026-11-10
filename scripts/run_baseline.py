@@ -8,7 +8,8 @@ V2 (--retriever bm25|hybrid) is the same agent with our tool shortlist (scripts/
 patched in at run time; upstream's code is not modified. --fix-tool-schema adds the
 zero-parameter tool-schema fix (SCHEMA_PATCH) to either. --refresh-tools fixes upstream's Cap 1
 tool list going stale (see REFRESH_PATCH). --evidence-answer is V5: the final answer is rewritten
-from the run's tool results only (ANSWER_PATCH, answer_rewrite.py).
+from the run's tool results only (ANSWER_PATCH, answer_rewrite.py). --short-history shortens long
+earlier answers in Cap 4 dialogue histories (HISTORY_PATCH, short_history.py).
 
 Usage:
     python scripts/run_baseline.py --split smoke --caps 1 2 3
@@ -108,6 +109,18 @@ def _to_pydantic_or_empty(self, tool_name, input_schema):
 MCPToolWrapper._convert_json_schema_to_pydantic = _to_pydantic_or_empty
 """
 
+# --short-history (#7): upstream puts every earlier Cap 4 turn's gold answer into the history
+# in full, and the longest (up to 9.4M characters) make the first LLM call fail. Each earlier
+# answer over MAX_HISTORY_CHARS keeps its first rows plus a note with the total (short_history.py).
+# Only the agent's input changes; the evaluator never reads the history.
+HISTORY_PATCH = """
+sys.path.append({scripts_dir!r})
+from benchmark.runner_helpers import BenchmarkItem
+from short_history import shorten_dialogue
+_from_dict = BenchmarkItem.from_dict.__func__
+BenchmarkItem.from_dict = classmethod(lambda cls, data: _from_dict(cls, shorten_dialogue(data)))
+"""
+
 # V5 (--evidence-answer): after the agent finishes, the same LLM rewrites its final answer from
 # that run's tool calls and results only (answer_rewrite.py). The tool calls, and so the replayed
 # evidence the judges see, are unchanged. Skipped when no tool was called, so Cap 4's
@@ -194,6 +207,8 @@ def main() -> int:
                     help="re-list tools after Cap 1's per-item universe switch (fixes an upstream runner bug)")
     ap.add_argument("--evidence-answer", action="store_true",
                     help="V5: rewrite the final answer from the run's tool results only")
+    ap.add_argument("--short-history", action="store_true",
+                    help="Cap 4: shorten long earlier answers in the dialogue history (first rows + total)")
     ap.add_argument("--llm-max-retries", type=int, default=None,
                     help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
     ap.add_argument("--run-id", default=None, help="reuse to resume a run")
@@ -206,6 +221,7 @@ def main() -> int:
     variant += "" if args.top_k_tools == 128 else f"k{args.top_k_tools}"
     variant += "rt" if args.refresh_tools else ""
     variant += "v5" if args.evidence_answer else ""
+    variant += "sh" if args.short_history else ""
     run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -219,6 +235,7 @@ def main() -> int:
                    + (" + tool-schema fix" if args.fix_tool_schema else "")
                    + (" + tool refresh" if args.refresh_tools else "")
                    + (" + V5 evidence-only answer" if args.evidence_answer else "")
+                   + (" + short history" if args.short_history else "")
                    + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
@@ -232,6 +249,7 @@ def main() -> int:
         "fix_tool_schema": args.fix_tool_schema,
         "refresh_tools": args.refresh_tools,
         "evidence_answer": args.evidence_answer,
+        "short_history": args.short_history,
         "max_iterations": args.max_iterations,
         "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
@@ -258,6 +276,8 @@ def main() -> int:
             patches.append(SCHEMA_PATCH)
         if args.refresh_tools:
             patches.append(REFRESH_PATCH)
+        if args.short_history:
+            patches.append(HISTORY_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         if args.evidence_answer:
             patches.append(ANSWER_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         runner = ["-c", SHIM.format(patches="".join(patches))] if patches else ["benchmark_runner.py"]

@@ -31,7 +31,7 @@ Ground rules:
 | 4 | Tue Nov 10 | **V1: our own runner and agent.** Same output format as IBM's, trace logging, includes the schema fix. | Anurag | 1 | Scores within noise of V0 (with the fix) |
 | 5 | Tue Nov 10 | ✅ **Rerun V2 on top of the schema fix**; choose the shortlist size | Aayush | 1, 2 | Size chosen, run scored |
 | 6 | Tue Nov 10 | ✅ **Retriever ablations**: retriever type × shortlist size (offline, no cost) | Aayush | – | Table in `results/tool_recall.md` |
-| 7 | Tue Nov 10 | **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today) | Piyush | – | No "context too long" errors on `dev-eval` Task 4 |
+| 7 | Tue Nov 10 | **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today). Cause: 10 dialogues (authors, menu) carry earlier answers of 0.3–9.4M characters. Patch ready as `--short-history` (first rows + total, ≤ 2,000 characters per answer); checked offline: largest history 2.3M → 1.6k tokens | Aayush (from Piyush, Nov 10) | – | No "context too long" errors on `dev-eval` Task 4 |
 | 8 | Wed Nov 11 | **V3: tool-call checking**: validate each call against its schema and repair bad arguments | Anurag | 4 | Run scored |
 | 9 | Wed Nov 11 | ✅ *(negative result)* **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Fallback if V1 is late: a second retrieval round inside the shortlist only. | Aayush | 4 (or fallback) | Task 3 run scored |
 | 10 | Wed Nov 11 | **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool | Piyush | 7 | Task 4 run scored |
@@ -72,18 +72,18 @@ in `scripts/run_baseline.py` already carry both fixes and V2.
 4. Retriever ablations (#6). Tue Nov 10
 5. V4: per-hop tool retrieval for Task 3 (#9). Wed Nov 11
 6. V5: evidence-only answers (#12), alone since Nov 10. Tue–Wed
-7. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
-8. Final runs for all variants (#15). Fri Nov 13
-9. Final report and reproducibility check (#17–18). Sat Nov 14
+7. Shorten long answers in the Task 4 history (#7), taken over from Piyush on Nov 10. Tue
+8. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
+9. Final runs for all variants (#15). Fri Nov 13
+10. Final report and reproducibility check (#17–18). Sat Nov 14
 
 ### Piyush: Task 4 and analysis
 
-1. Shorten long answers in the Task 4 history (#7). Tue Nov 10
-2. V6: policy guard and deliberate refusals (#10). Wed Nov 11
-3. Diagnostics script over the traces (#11). Wed Nov 11
-4. Error analysis (#13). Thu Nov 12
-5. Report: Task 4 and error-analysis sections (#14). Thu–Fri
-6. Final report (#17). Sat Nov 14
+1. V6: policy guard and deliberate refusals (#10). Wed Nov 11
+2. Diagnostics script over the traces (#11). Wed Nov 11
+3. Error analysis (#13). Thu Nov 12
+4. Report: Task 4 and error-analysis sections (#14). Thu–Fri
+5. Final report (#17). Sat Nov 14
 
 ## Risks
 
