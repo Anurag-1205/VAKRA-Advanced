@@ -89,3 +89,36 @@ so they are comparable with each other, not with later rows
    configuration therefore keeps k = 128.
 5. **V4 (per-hop retrieval) has little left to gain.** At k = 128 there is no retrieval gap for it
    to close on dev-eval; it could only help at smaller k, which point 4 argues against.
+
+## V4: retrieving tools again at each hop (offline check, 2026-11-10)
+
+`python scripts/hop_recall.py --split dev-eval --retriever <r>`. No LLM calls. Cap 3 dev-eval:
+35 items (1 one-hop, 31 two-hop, 3 three-hop), all in domains with more than 50 tools. An item
+counts as kept at k if every hop's gold tool is in that hop's top k.
+
+- **once:** rank by the query, the same top k at every hop (V2 today).
+- **per-hop:** hop 1 by the query, then hop i > 1 by the query plus hop i−1's **gold** call and
+  response. Using the gold response makes this an upper bound for a live agent.
+- **fused:** reciprocal-rank fusion of the two rankings.
+
+| Retriever | Mode | R@5 | R@10 | R@20 | R@32 | R@50 |
+|---|---|---:|---:|---:|---:|---:|
+| hybrid | once | 0.257 | 0.314 | 0.571 | 0.800 | 0.857 |
+| hybrid | per-hop | 0.257 | 0.286 | 0.600 | 0.800 | 0.886 |
+| hybrid | fused | 0.257 | 0.314 | 0.571 | 0.800 | 0.886 |
+| minilm | once | 0.257 | 0.343 | 0.514 | 0.714 | 0.800 |
+| minilm | per-hop | 0.229 | 0.314 | 0.514 | 0.686 | 0.800 |
+| bm25 | once | 0.200 | 0.371 | 0.543 | 0.714 | 0.971 |
+| bm25 | per-hop | 0.229 | 0.371 | 0.514 | 0.743 | 0.971 |
+
+(The "once" rows match the dev-eval table above.)
+
+- **Per-hop retrieval changes at most 1 of 35 items in either direction**, even with gold
+  evidence.
+- **Why there is little to gain.** With hybrid at k = 32, 7 items miss a gold tool:
+  - 4 miss it at hop 1, which per-hop retrieval cannot change;
+  - 3 miss it at hop 2, and per-hop recovers none of them (1 at k = 50).
+- **Why the evidence does not help.** Previous responses are mostly bare values (`[["USA"]]`,
+  `[[65.46]]`), which say little about which tool comes next.
+- **Decision for #9: no live V4 patch and no paid run.** The upper bound shows no gain at any k,
+  and at the final k = 128 there is no retrieval gap at all (conclusion 1 above).

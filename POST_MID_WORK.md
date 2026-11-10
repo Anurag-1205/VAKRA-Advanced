@@ -33,7 +33,7 @@ Ground rules:
 | 6 | Tue Nov 10 | ✅ **Retriever ablations**: retriever type × shortlist size (offline, no cost) | Aayush | – | Table in `results/tool_recall.md` |
 | 7 | Tue Nov 10 | **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today) | Piyush | – | No "context too long" errors on `dev-eval` Task 4 |
 | 8 | Wed Nov 11 | **V3: tool-call checking**: validate each call against its schema and repair bad arguments | Anurag | 4 | Run scored |
-| 9 | Wed Nov 11 | **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Fallback if V1 is late: a second retrieval round inside the shortlist only. | Aayush | 4 (or fallback) | Task 3 run scored |
+| 9 | Wed Nov 11 | ✅ *(negative result)* **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Fallback if V1 is late: a second retrieval round inside the shortlist only. | Aayush | 4 (or fallback) | Task 3 run scored |
 | 10 | Wed Nov 11 | **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool | Piyush | 7 | Task 4 run scored |
 | 11 | Wed Nov 11 | **Diagnostics script** over V1's traces | Piyush | 4 | Runs on any V1+ run |
 | 12 | Tue–Wed | **V5: write the answer only from tool evidence** (13% of items fail only the groundedness check). Offline test: +10 of 25 on Tasks 2–4 ([results](results/groundedness_dev_eval.md)); patch ready as `--evidence-answer` | Aayush | – | Run scored |
@@ -47,7 +47,8 @@ Ground rules:
 
 **Status 2026-11-10:** ✅ = done. Results for #1, #2, #3 and #5 are in
 [results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md); #6 in
-[results/tool_recall.md](results/tool_recall.md) (retrieval is solved at k = 128, so V4 has little left to gain);
+[results/tool_recall.md](results/tool_recall.md) (retrieval is solved at k = 128); #9 (V4) checked offline there too: no gain even with gold
+evidence, so no live patch or paid run;
 V5 (#12) offline test and full run in [results/groundedness_dev_eval.md](results/groundedness_dev_eval.md) (macro 0.453 → 0.492). Also done, not planned: a
 fix for upstream's stale Cap 1 tool list (`--refresh-tools`, Aayush), without which Task 1 could not
 be scored. Open question for the team: whether #4 (V1) is still needed, since the run-time patches
