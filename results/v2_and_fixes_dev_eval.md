@@ -14,7 +14,7 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 
 | Variant | Cap 1 (n = 60) | Cap 2 (n = 120) | Cap 3 (n = 35) | Cap 4 (n = 60) |
 |---|---:|---:|---:|---:|
-| V0, upstream as is | not usable (bug below) | 0.408 (49) | 0.343 (12) | 0.350 (21)\* |
+| V0, upstream as is | 0 of the first 7 (run stopped; bug below)† | 0.408 (49) | 0.343 (12) | 0.350 (21)\* |
 | V0 + tool refresh | 0.483 (29) | – | – | – |
 | V2 hybrid, 128 tools | – | 0.450 (54) | 0.371 (13) | – |
 | V2 hybrid, 50 tools | – | 0.425 (51) | 0.286 (10) | – |
@@ -23,6 +23,11 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 
 \* Cap 4 includes dialogues credited after an agent crash (unanswerable gold, no tool call): 3 for
 V0, 1 for the new run. Without them both score **18/60 = 0.300**.
+
+† Unmodified upstream V0 on Cap 1 was stopped to save cost once the stale-tool-list bug was clear.
+With a 25-iteration cap, all 7 items it completed hit the limit without an answer
+(`20261109-2309-v0-maxit25-groq-dev-eval-cap1-ABORTED-TOOLSET`). It is kept as its own row, separate
+from "V0 + tool refresh", so the official baseline stays upstream's unmodified runner.
 
 Macro average over Caps 1–4 for the last row: **0.453**.
 
@@ -127,4 +132,6 @@ Next targets, by size:
   are very long lists. This is upstream's judge failing on size (the `{e}` is an upstream
   formatting bug), not an authentication problem. No 401 occurred in any run. The 27 HTTP 429s
   during the fixed run were absorbed by retries; no item failed on one.
-- **Cost:** not yet read from the Groq dashboard for these runs.
+- **Cost:** **$3.25** for all of these runs (Groq dashboard), including the two stopped Cap 1
+  runs and the 7-item Cap 1 check. The project total is now **$5.25** ($2.00 for the baselines in
+  [baseline_dev_eval.md](baseline_dev_eval.md)).

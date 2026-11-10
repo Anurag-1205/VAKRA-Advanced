@@ -93,9 +93,9 @@ agents.agent_interface.ToolShortlister = Shortlister
 # MCPToolWrapper._convert_json_schema_to_pydantic returns None, so LangChain infers a schema
 # from the wrapper's (**kwargs) function and sends the LLM an `args` array, a required
 # `config` (LangChain's RunnableConfig, with its whole docstring) and `kwargs`. Groq then
-# rejects the model's correct `{{}}` call with HTTP 400 ("missing properties: 'config'" or
+# rejects the model's correct `{}` call with HTTP 400 ("missing properties: 'config'" or
 # "`/args`: expected array, but got null"). Here such a tool gets an explicit empty schema,
-# which the LLM sees as {{"properties": {{}}, "type": "object"}}. Tools with parameters are
+# which the LLM sees as {"properties": {}, "type": "object"}. Tools with parameters are
 # unchanged, as are prompts, the tool calls sent to the MCP server and the agent logic.
 SCHEMA_PATCH = """
 from pydantic import create_model
@@ -103,7 +103,7 @@ from agents.mcp_tool_wrapper import MCPToolWrapper
 _to_pydantic = MCPToolWrapper._convert_json_schema_to_pydantic
 def _to_pydantic_or_empty(self, tool_name, input_schema):
     model = _to_pydantic(self, tool_name, input_schema)
-    return model if model is not None else create_model(f"{{tool_name}}Input")
+    return model if model is not None else create_model(f"{tool_name}Input")
 MCPToolWrapper._convert_json_schema_to_pydantic = _to_pydantic_or_empty
 """
 
