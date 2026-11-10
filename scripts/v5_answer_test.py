@@ -3,7 +3,8 @@
 Takes the items of scored runs that lost their point only on groundedness (ungrounded_items.py)
 and a control sample of correct items (the same number per capability, fixed seed). For each one
 it replays the agent's tool calls on the local MCP containers, the same way the evaluator does
-(free), and asks the agent model to rewrite the final answer from that evidence (V5_PROMPT). It
+(free), and asks the agent model to rewrite the final answer from that evidence (V5_PROMPT in
+answer_rewrite.py, the prompt --evidence-answer uses at run time). It
 writes two runs with the same items and gold data:
 
     runs/<id>-orig   answers unchanged (re-scoring them measures judge noise)
@@ -24,25 +25,11 @@ import sys
 import time
 from collections import defaultdict
 
+from answer_rewrite import V5_PROMPT, evidence_prompt
 from common import CAPABILITIES, GROQ_OPENAI_BASE_URL, RUNS_DIR, UPSTREAM, load_dotenv
 from ungrounded_items import ungrounded
 
 MODEL = "openai/gpt-oss-120b"
-MAX_RESPONSE_CHARS = 8000  # per tool response in the rewrite prompt
-MAX_EVIDENCE_CHARS = 60000  # the most recent responses are kept
-
-V5_PROMPT = """You write the final answer to a user's question using only the results of tool calls that were already made. You are also given a draft answer.
-
-Rules:
-1. Every fact in your answer must appear in the tool results. Copy names, numbers and values as they appear there. Do not add units, conversions, rounding, dates or explanations that the tool results do not contain.
-2. Do not use outside knowledge, even if you are sure it is true.
-3. Do not claim more than the results show: avoid words such as "only", "all", "sole" or "complete" unless a tool result says so.
-4. If a result was filtered or sorted by a tool call's arguments, you may say so by naming that argument (for example: "filtered by country = USA").
-5. If a calculation is needed, use only numbers from the tool results.
-6. If the tool results do not contain the answer, say that the information is not available instead of guessing.
-7. Keep the draft's conclusion when the tool results support it. Be concise. When the answer is a list, include every item.
-
-Reply with the final answer only."""
 
 
 def load_preds(run_id: str, cap_dir: str) -> dict:
@@ -103,15 +90,9 @@ async def replay(items: list[dict]) -> None:
 
 
 def rewrite_prompt(it: dict) -> str:
-    blocks = []
-    for i, (call, resp) in enumerate(it["evidence"], 1):
-        resp = str(resp)
-        if len(resp) > MAX_RESPONSE_CHARS:
-            resp = resp[:MAX_RESPONSE_CHARS] + " …[truncated]"
-        blocks.append(f"[{i}] {call['name']}({json.dumps(call['arguments'], ensure_ascii=False)})\n-> {resp}")
-    evidence = "\n\n".join(blocks)[-MAX_EVIDENCE_CHARS:] or "(no tool calls were made)"
     turn = it["pred"]["output"][-1]
-    return f"Question: {turn['query']}\n\nTool calls and results:\n{evidence}\n\nDraft answer:\n{turn['answer']}"
+    calls = [(call["name"], call["arguments"], resp) for call, resp in it["evidence"]]
+    return evidence_prompt(turn["query"], calls, turn["answer"])
 
 
 def rewrite(items: list[dict]) -> dict:

@@ -7,7 +7,8 @@ Predictions land in runs/<run_id>/output/<cap_dir>/<domain>.json (official forma
 V2 (--retriever bm25|hybrid) is the same agent with our tool shortlist (scripts/retrieval.py)
 patched in at run time; upstream's code is not modified. --fix-tool-schema adds the
 zero-parameter tool-schema fix (SCHEMA_PATCH) to either. --refresh-tools fixes upstream's Cap 1
-tool list going stale (see REFRESH_PATCH).
+tool list going stale (see REFRESH_PATCH). --evidence-answer is V5: the final answer is rewritten
+from the run's tool results only (ANSWER_PATCH, answer_rewrite.py).
 
 Usage:
     python scripts/run_baseline.py --split smoke --caps 1 2 3
@@ -107,6 +108,34 @@ def _to_pydantic_or_empty(self, tool_name, input_schema):
 MCPToolWrapper._convert_json_schema_to_pydantic = _to_pydantic_or_empty
 """
 
+# V5 (--evidence-answer): after the agent finishes, the same LLM rewrites its final answer from
+# that run's tool calls and results only (answer_rewrite.py). The tool calls, and so the replayed
+# evidence the judges see, are unchanged. Skipped when no tool was called, so Cap 4's
+# "no tool call" refusals keep upstream's special-case credit. On a failed rewrite the draft is kept.
+ANSWER_PATCH = """
+sys.path.append({scripts_dir!r})
+import logging
+import agents.agent_interface
+from langchain_core.messages import HumanMessage, SystemMessage
+from answer_rewrite import V5_PROMPT, evidence_prompt
+_answer_run = agents.agent_interface.LangGraphReActAgent.run
+async def _run_with_evidence_answer(self, input, *args, **kwargs):
+    response = await _answer_run(self, input, *args, **kwargs)
+    if response.content and response.tool_calls:
+        query = input if isinstance(input, str) else next(
+            (m.content for m in reversed(input) if m.role == "user"), "")
+        calls = [(c["tool_name"], c["arguments"], c["result"]) for c in response.tool_calls]
+        try:
+            msg = await self._llm.ainvoke([SystemMessage(content=V5_PROMPT),
+                                           HumanMessage(content=evidence_prompt(query, calls, response.content))])
+            if str(msg.content).strip():
+                response.content = str(msg.content).strip()
+        except Exception as e:
+            logging.getLogger("v5").warning("evidence-answer rewrite failed, keeping the draft: %r", e)
+    return response
+agents.agent_interface.LangGraphReActAgent.run = _run_with_evidence_answer
+"""
+
 
 def git_sha(path: Path) -> str:
     """Short HEAD sha, suffixed '-dirty' when tracked files have local changes."""
@@ -153,6 +182,8 @@ def main() -> int:
     ap.add_argument("--max-iterations", type=int, default=None)
     ap.add_argument("--refresh-tools", action="store_true",
                     help="re-list tools after Cap 1's per-item universe switch (fixes an upstream runner bug)")
+    ap.add_argument("--evidence-answer", action="store_true",
+                    help="V5: rewrite the final answer from the run's tool results only")
     ap.add_argument("--llm-max-retries", type=int, default=None,
                     help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
     ap.add_argument("--run-id", default=None, help="reuse to resume a run")
@@ -164,6 +195,7 @@ def main() -> int:
     variant += "fix" if args.fix_tool_schema else ""
     variant += "" if args.top_k_tools == 128 else f"k{args.top_k_tools}"
     variant += "rt" if args.refresh_tools else ""
+    variant += "v5" if args.evidence_answer else ""
     run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -176,6 +208,7 @@ def main() -> int:
                     else f"V2 upstream LangGraphReActAgent + {args.retriever} tool shortlist")
                    + (" + tool-schema fix" if args.fix_tool_schema else "")
                    + (" + tool refresh" if args.refresh_tools else "")
+                   + (" + V5 evidence-only answer" if args.evidence_answer else "")
                    + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
@@ -188,6 +221,7 @@ def main() -> int:
         "retriever": args.retriever,
         "fix_tool_schema": args.fix_tool_schema,
         "refresh_tools": args.refresh_tools,
+        "evidence_answer": args.evidence_answer,
         "max_iterations": args.max_iterations,
         "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
@@ -214,6 +248,8 @@ def main() -> int:
             patches.append(SCHEMA_PATCH)
         if args.refresh_tools:
             patches.append(REFRESH_PATCH)
+        if args.evidence_answer:
+            patches.append(ANSWER_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         runner = ["-c", SHIM.format(patches="".join(patches))] if patches else ["benchmark_runner.py"]
         cmd = [
             sys.executable, *runner,

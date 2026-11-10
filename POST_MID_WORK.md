@@ -36,7 +36,7 @@ Ground rules:
 | 9 | Wed Nov 11 | **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Fallback if V1 is late: a second retrieval round inside the shortlist only. | Aayush | 4 (or fallback) | Task 3 run scored |
 | 10 | Wed Nov 11 | **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool | Piyush | 7 | Task 4 run scored |
 | 11 | Wed Nov 11 | **Diagnostics script** over V1's traces | Piyush | 4 | Runs on any V1+ run |
-| 12 | Thu Nov 12 | *(If 1–11 are on track)* **V5: write the answer only from tool evidence** (9–17% of items fail the groundedness check) | Anurag + Aayush | 4 | Run scored |
+| 12 | Tue–Wed | **V5: write the answer only from tool evidence** (13% of items fail only the groundedness check). Offline test: +10 of 25 on Tasks 2–4 ([results](results/groundedness_dev_eval.md)); patch ready as `--evidence-answer` | Aayush | – | Run scored |
 | 13 | Thu Nov 12 | **Error analysis**: about 20 failed items per task, with example traces | Piyush | 11 | Section drafted |
 | 14 | Thu–Fri | **Report sections drafted:** method and system *(Anurag)*, tool retrieval and Tasks 2–3 *(Aayush)*, Task 4 and error analysis *(Piyush)* | All | – | Draft in `report/` |
 | 15 | Fri Nov 13 | **Final runs**: the best configuration on all tasks | Aayush (runs), all | 1–12 | All final runs scored |
@@ -58,9 +58,8 @@ in `scripts/run_baseline.py` already carry both fixes and V2.
 1. Fix the tool-schema bug (#1). **Mon Nov 9**
 2. V1: own runner and agent (#4). Tue Nov 10
 3. V3: tool-call checking and repair (#8). Wed Nov 11
-4. V5: evidence-only answers, with Aayush, if time (#12). Thu Nov 12
-5. Report: method and system sections (#14). Thu–Fri
-6. Final report, reproducibility check, submission (#17–19). Sat–Sun
+4. Report: method and system sections (#14). Thu–Fri
+5. Final report, reproducibility check, submission (#17–19). Sat–Sun
 
 ### Aayush: tool retrieval, Tasks 2–3, running everything
 
@@ -69,7 +68,7 @@ in `scripts/run_baseline.py` already carry both fixes and V2.
 3. Rerun V2 on top of the fix; choose the shortlist size (#5). Tue Nov 10
 4. Retriever ablations (#6). Tue Nov 10
 5. V4: per-hop tool retrieval for Task 3 (#9). Wed Nov 11
-6. V5: evidence-only answers, with Anurag, if time (#12). Thu Nov 12
+6. V5: evidence-only answers (#12), alone since Nov 10. Tue–Wed
 7. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
 8. Final runs for all variants (#15). Fri Nov 13
 9. Final report and reproducibility check (#17–18). Sat Nov 14
