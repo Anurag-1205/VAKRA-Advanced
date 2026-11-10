@@ -45,3 +45,47 @@ Cap 3 is the same 35 items as dev-heldout.
 4. **One unsolvable item.** In Cap 2 `world`, the gold tool of item `486ea46224d1-cdd0b84e2de8`
    (`get_countries_with_cities_in_population_range_and_low_life_expectancy`) is not in the
    domain's tool catalog, so no agent can solve it.
+
+## dev-eval, and what the paid runs showed (2026-11-10)
+
+Same script on the split every paid run is scored on: `python scripts/tool_recall.py --split dev-eval --caps 2 3`.
+
+| Cap | Retriever | R@5 | R@10 | R@20 | **R@32** | R@50 | **R@128** | MRR |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 2 | minilm (V0) | 0.708 | 0.825 | 0.900 | 0.925 | 0.958 | 0.992 | 0.563 |
+| 2 | bm25 | 0.625 | 0.750 | 0.842 | 0.933 | 0.950 | 0.992 | 0.477 |
+| 2 | hybrid (V2) | 0.742 | 0.817 | 0.925 | **0.958** | 0.975 | **0.992** | 0.565 |
+| 3 | minilm (V0) | 0.257 | 0.343 | 0.514 | 0.714 | 0.800 | 0.943 | 0.624 |
+| 3 | bm25 | 0.200 | 0.371 | 0.543 | 0.714 | 0.971 | 1.000 | 0.540 |
+| 3 | hybrid (V2) | 0.257 | 0.314 | 0.571 | **0.800** | 0.857 | **1.000** | 0.685 |
+
+- **Cap 2:** 0.992 = 119 / 120. The missing item is the unsolvable `world` item from finding 4 (its
+  gold tool is not in the catalog), so every solvable item's gold tools survive at k = 128.
+- **Cap 3:** the same 35 items as dev-heldout, so its numbers are unchanged.
+
+End-to-end scores of the same retrievers and sizes. All three runs predate the tool-schema fix,
+so they are comparable with each other, not with later rows
+([v2_and_fixes_dev_eval.md](v2_and_fixes_dev_eval.md)):
+
+| Run | Retriever, k | Cap 2 | Cap 3 |
+|---|---|---:|---:|
+| V0 | minilm, 128 | 0.408 | 0.343 |
+| V2 | hybrid, 128 | 0.450 | 0.371 |
+| V2 | hybrid, 50 | 0.425 | 0.286 |
+
+## Conclusions on tool retrieval
+
+1. **At upstream's k = 128, retrieval is solved on dev-eval.** The hybrid shortlist keeps every
+   gold tool of every solvable Cap 2 and Cap 3 item. None of the items lost in the V2 runs is a
+   retrieval failure; what remains is reasoning and answer quality.
+2. **Hence V2 at 128 shows no real gain over V0.** Its +5 on Cap 2 is within run-to-run noise
+   (Finding 3 in [v2_and_fixes_dev_eval.md](v2_and_fixes_dev_eval.md)). Only Cap 3's recall moves
+   at 128 (0.943 → 1.000, 2 items).
+3. **The hybrid's advantage is at small k.** At k = 32 it keeps gold tools for 0.958 vs 0.925 of
+   Cap 2 and 0.800 vs 0.714 of Cap 3. At k = 50, BM25 alone is best on Cap 3 (0.971), a sign that
+   multi-hop queries name later hops by keyword more than by meaning.
+4. **Smaller shortlists cost accuracy end to end.** Going from 128 to 50 hybrid tools lost 3 Cap 2
+   items and 3 Cap 3 items (within noise), matching Cap 3's recall drop to 0.857. The final
+   configuration therefore keeps k = 128.
+5. **V4 (per-hop retrieval) has little left to gain.** At k = 128 there is no retrieval gap for it
+   to close on dev-eval; it could only help at smaller k, which point 4 argues against.
