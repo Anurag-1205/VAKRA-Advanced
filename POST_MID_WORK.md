@@ -31,7 +31,7 @@ Ground rules:
 | 4 | Tue Nov 10 | **V1: our own runner and agent.** Same output format as IBM's, trace logging, includes the schema fix. | Anurag | 1 | Scores within noise of V0 (with the fix) |
 | 5 | Tue Nov 10 | ✅ **Rerun V2 on top of the schema fix**; choose the shortlist size | Aayush | 1, 2 | Size chosen, run scored |
 | 6 | Tue Nov 10 | ✅ **Retriever ablations**: retriever type × shortlist size (offline, no cost) | Aayush | – | Table in `results/tool_recall.md` |
-| 7 | Tue Nov 10 | **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today). Cause: 10 dialogues (authors, menu) carry earlier answers of 0.3–9.4M characters. Patch ready as `--short-history` (first rows + total, ≤ 2,000 characters per answer); checked offline: largest history 2.3M → 1.6k tokens | Aayush (from Piyush, Nov 10) | – | No "context too long" errors on `dev-eval` Task 4 |
+| 7 | Tue Nov 10 | ✅ **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today). Cause: 10 dialogues (authors, menu) carry earlier answers of 0.3–9.4M characters. Patch ready as `--short-history` (first rows + total, ≤ 2,000 characters per answer); checked offline: largest history 2.3M → 1.6k tokens. Live: 0 context errors, Task 4 0.317 → 0.433 ([results](results/v2_and_fixes_dev_eval.md), Finding 4) | Aayush (from Piyush, Nov 10) | – | No "context too long" errors on `dev-eval` Task 4 |
 | 8 | Wed Nov 11 | **V3: tool-call checking**: validate each call against its schema and repair bad arguments | Anurag | 4 | Run scored |
 | 9 | Wed Nov 11 | ✅ *(negative result)* **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Fallback if V1 is late: a second retrieval round inside the shortlist only. | Aayush | 4 (or fallback) | Task 3 run scored |
 | 10 | Wed Nov 11 | **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool | Piyush | 7 | Task 4 run scored |
@@ -49,7 +49,7 @@ Ground rules:
 [results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md); #6 in
 [results/tool_recall.md](results/tool_recall.md) (retrieval is solved at k = 128); #9 (V4) checked offline there too: no gain even with gold
 evidence, so no live patch or paid run;
-V5 (#12) offline test and full run in [results/groundedness_dev_eval.md](results/groundedness_dev_eval.md) (macro 0.453 → 0.492). Also done, not planned: a
+V5 (#12) offline test and full run in [results/groundedness_dev_eval.md](results/groundedness_dev_eval.md) (macro 0.453 → 0.492). #7 (short Task 4 history, Aayush) recovers 6 of the 10 dialogues that did not fit: Task 4 0.317 → 0.433, macro 0.521. Also done, not planned: a
 fix for upstream's stale Cap 1 tool list (`--refresh-tools`, Aayush), without which Task 1 could not
 be scored. Open question for the team: whether #4 (V1) is still needed, since the run-time patches
 in `scripts/run_baseline.py` already carry both fixes and V2.

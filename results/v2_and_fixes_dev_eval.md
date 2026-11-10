@@ -20,10 +20,11 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 | V2 hybrid, 50 tools | – | 0.425 (51) | 0.286 (10) | – |
 | **V2 hybrid, 128 tools + schema fix + tool refresh** | **0.450 (27)** | **0.558 (67)** | **0.486 (17)** | **0.317 (19)\*** |
 | + V5 evidence-only answer (`--evidence-answer`, Nov 10; see [groundedness_dev_eval.md](groundedness_dev_eval.md)) | 0.583 (35) | 0.583 (70) | 0.486 (17) | 0.317 (19)\* |
+| + short history (`--short-history`, Cap 4 only, Nov 10; see Finding 4) | – | – | – | **0.433 (26)\*** |
 | 95% half-width | ±0.13 | ±0.09 | ±0.17 | ±0.12 |
 
 \* Cap 4 includes dialogues credited after an agent crash (unanswerable gold, no tool call): 3 for
-V0, 1 for the new run. Without them both score **18/60 = 0.300**.
+V0, 1 for the new run. Without them both score **18/60 = 0.300**. The short-history run also has 1 (25/60 = 0.417 without it).
 
 † Unmodified upstream V0 on Cap 1 was stopped to save cost once the stale-tool-list bug was clear.
 With a 25-iteration cap, all 7 items it completed hit the limit without an answer
@@ -38,6 +39,7 @@ Run ids:
 - V2 hybrid 128 / 50, Caps 2–3: `20261109-2225-v2hybrid-groq-dev-eval`, `20261109-2225-v2hybridk50-groq-dev-eval`
 - V2 + both fixes, Caps 2–4: `20261109-2356-v2hybridfixrt-groq-dev-eval`
 - V2 + both fixes, Cap 1 (max 25 iterations): `20261109-2356-v2hybridfixrt-maxit25-groq-dev-eval-cap1`
+- + V5 + short history, Cap 4: `20261110-2302-v2hybridfixrtv5sh-groq-dev-eval-cap4`
 - V0 rows: see [baseline_dev_eval.md](baseline_dev_eval.md).
 
 Cap 1 runs use `--max-iterations 25` as a cost guard (upstream sets no limit). It never decided an
@@ -98,6 +100,43 @@ Consequences:
 - **Cap 1 (0.483 → 0.450) and Cap 4 (0.300 → 0.300 without crash credit) are unchanged** within
   noise; neither fix targets them much.
 
+## Finding 4: long gold answers in the Cap 4 history (#7)
+
+Upstream (`BenchmarkItem.from_dict` in `benchmark/runner_helpers.py`) puts every earlier turn's
+gold answer into the dialogue history as `str(answer)`, however long. In 10 of the 60 `dev-eval`
+dialogues (5 authors, 5 menu) an earlier answer is a whole table: 1.3M to 9.4M characters, up to
+258k rows. The first LLM call is rejected ("Please reduce the length of the messages") before
+any tool is called. This was the 16.7% "context too long" row below.
+
+`--short-history` (`scripts/short_history.py`) keeps each earlier answer over 2,000 characters
+to its first rows plus a note: "... (61223 rows in total; only the first 75 are shown)". The
+agent can still call tools for the rest, and the evaluator never reads the history. Checked
+offline through upstream's own `from_dict` (`python scripts/short_history.py --run-id <run>`):
+
+- 30 of the 60 dialogues are shortened; the largest history goes from about 2.3M tokens to 1.6k.
+- Queries, turn ids, policy instructions and message order are unchanged.
+- In the follow-up turns of these dialogues the earlier list is not needed (for example, "List
+  down the name of dishes from menus created in April", then "What is the highest price of the
+  dish 'Clear green turtle'?").
+
+Live run (Cap 4 only, the V5 setup plus `--short-history`), compared item by item with the V5
+run:
+
+| Dialogues | n | Correct before | Correct after | Won / lost |
+|---|---:|---:|---:|---|
+| Failed before: history too long | 10 | 0 | **6** | +6 / −0 |
+| Shortened, fit before (≤ 73k tokens of history) | 20 | 10 | 11 | +3 / −2 |
+| Not shortened | 30 | 9 | 9 | +2 / −2 |
+| **Total** | **60** | **19** | **26** | |
+
+- **0 "context too long" errors** (10 before). The 2 agent errors left are a tool response too
+  large for Groq (HTTP 413, a single-turn hockey dialogue; in every run so far) and one tool call
+  Groq rejected for a bad parameter.
+- **+7 dialogues (0.317 → 0.433)**: +6 are the recovered dialogues; the other 50 are +1 net,
+  i.e. noise. Shortening a history that already fit neither helps nor hurts.
+- **Macro over Caps 1–4 with V5 and short history: 0.521** (Caps 1–3 from the V5 run; the patch
+  changes only multi-turn histories, so it does not affect them).
+
 ## Shortlist size
 
 128 tools was chosen over 50 for the fixed run: higher on both Cap 2 (0.450 vs 0.425) and Cap 3
@@ -122,7 +161,7 @@ Next targets, by size:
 
 - **Groundedness failures** (9–18% of items): V5, evidence-only answers. In Cap 1, 10 items have
   the right answer but fail the groundedness judge.
-- **Cap 4 context length** (17%): shorten long answers in the dialogue history (Piyush, #7).
+- ~~**Cap 4 context length** (17%)~~: fixed by `--short-history` (#7, Finding 4).
 - **Cap 4 refusals:** still 0 deliberate refusals on the 11 unanswerable dialogues; policy guard
   (V6, #10).
 - **Remaining tool-call rejections** (2–6%): V3 (#8).
