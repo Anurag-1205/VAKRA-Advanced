@@ -118,3 +118,35 @@ This is a limit of the evaluator, not of the agent, and it applies to every syst
   "1924"). It should only apply when the draft has no supporting tool result at all.
 - **Cost:** about $0.04 for the rewrites (125k input + 32k output tokens), plus two scoring
   passes over 70 items.
+
+## Full V5 run on dev-eval (2026-11-10)
+
+Same setup as the last row of [v2_and_fixes_dev_eval.md](v2_and_fixes_dev_eval.md), plus
+`--evidence-answer` (with the revised rule 6). Runs: `20261110-1559-v2hybridfixrtv5-groq-dev-eval`
+(Caps 2–4) and `20261110-1559-v2hybridfixrtv5-maxit25-groq-dev-eval-cap1`.
+
+| | Cap 1 | Cap 2 | Cap 3 | Cap 4 | Macro |
+|---|---:|---:|---:|---:|---:|
+| V2 + both fixes | 0.450 (27) | 0.558 (67) | 0.486 (17) | 0.317 (19)\* | 0.453 |
+| **+ V5** | **0.583 (35)** | **0.583 (70)** | 0.486 (17) | 0.317 (19)\* | **0.492** |
+| Items won / lost | +9 / −1 | +8 / −5 | +2 / −2 | +3 / −3 | |
+| "Not grounded" items | 10 → 4 | 11 → 7 | 3 → 3 | 11 → 11 | 35 → 25 |
+
+\* Includes 1 dialogue credited after an agent crash; 18/60 = 0.300 without it, in both runs.
+
+- **On Caps 2–4, V5 recovers the items it targets:** 10 of the 25 previously ungrounded items
+  are correct, the same 10 / 25 as the offline test.
+- **Cap 2's net gain is smaller (+3)** because of the usual churn. Of its 5 losses (and Cap 3's 2):
+  - about 2 look caused by V5: a rewrite that redid a percentage calculation ("≈733%"), and
+    possibly answers that ask for clarification (the draft is not recorded, so this is unclear);
+  - the rest are judge inconsistencies ("months" accepted on Nov 9 and rejected on Nov 10; a date
+    the judge invented) or the agent behaving differently (one context-length crash).
+- **Cap 1 rose by 8 items (+9 / −1).** 5 of the 9 wins were previously ungrounded. The offline test
+  showed Cap 1's groundedness verdicts are mostly noise (5 of 10 pass on a re-score alone), so part
+  of this gain is likely noise too. The other 4 wins went from wrong to right.
+- **Cap 4 is unchanged.** Its "not grounded" items are mostly long lists filtered by a tool
+  argument the judge cannot see (cause B), which V5 does not fix.
+- **Macro +0.039 (0.453 → 0.492)**, in line with the offline estimate of about +4 points. Each
+  capability's change is within its 95% half-width; the evidence is the item-level pattern above.
+- **Next time, record the draft** before the rewrite (in the output file or the run log) so that
+  V5-caused changes can be told apart from agent noise.

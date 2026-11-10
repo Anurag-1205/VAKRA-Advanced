@@ -19,6 +19,7 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 | V2 hybrid, 128 tools | – | 0.450 (54) | 0.371 (13) | – |
 | V2 hybrid, 50 tools | – | 0.425 (51) | 0.286 (10) | – |
 | **V2 hybrid, 128 tools + schema fix + tool refresh** | **0.450 (27)** | **0.558 (67)** | **0.486 (17)** | **0.317 (19)\*** |
+| + V5 evidence-only answer (`--evidence-answer`, Nov 10; see [groundedness_dev_eval.md](groundedness_dev_eval.md)) | 0.583 (35) | 0.583 (70) | 0.486 (17) | 0.317 (19)\* |
 | 95% half-width | ±0.13 | ±0.09 | ±0.17 | ±0.12 |
 
 \* Cap 4 includes dialogues credited after an agent crash (unanswerable gold, no tool call): 3 for
