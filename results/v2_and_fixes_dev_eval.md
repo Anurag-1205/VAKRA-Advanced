@@ -21,10 +21,11 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 | **V2 hybrid, 128 tools + schema fix + tool refresh** | **0.450 (27)** | **0.558 (67)** | **0.486 (17)** | **0.317 (19)\*** |
 | + V5 evidence-only answer (`--evidence-answer`, Nov 10; see [groundedness_dev_eval.md](groundedness_dev_eval.md)) | 0.583 (35) | 0.583 (70) | 0.486 (17) | 0.317 (19)\* |
 | + short history (`--short-history`, Cap 4 only, Nov 10; see Finding 4) | – | – | – | **0.433 (26)\*** |
+| + V6 policy guard (`--policy-guard`, Cap 4 only, Nov 11; see Finding 5) | – | – | – | **0.500 (30)** |
 | 95% half-width | ±0.13 | ±0.09 | ±0.17 | ±0.12 |
 
 \* Cap 4 includes dialogues credited after an agent crash (unanswerable gold, no tool call): 3 for
-V0, 1 for the new run. Without them both score **18/60 = 0.300**. The short-history run also has 1 (25/60 = 0.417 without it).
+V0, 1 for the new run. Without them both score **18/60 = 0.300**. The short-history run also has 1 (25/60 = 0.417 without it). The V6 run has none: that dialogue's gold refusal is now credited because the guard refused on purpose.
 
 † Unmodified upstream V0 on Cap 1 was stopped to save cost once the stale-tool-list bug was clear.
 With a 25-iteration cap, all 7 items it completed hit the limit without an answer
@@ -40,6 +41,7 @@ Run ids:
 - V2 + both fixes, Caps 2–4: `20261109-2356-v2hybridfixrt-groq-dev-eval`
 - V2 + both fixes, Cap 1 (max 25 iterations): `20261109-2356-v2hybridfixrt-maxit25-groq-dev-eval-cap1`
 - + V5 + short history, Cap 4: `20261110-2302-v2hybridfixrtv5sh-groq-dev-eval-cap4`
+- + V5 + short history + V6, Cap 4: `20261111-1610-v2hybridfixrtv5shv6-groq-dev-eval-cap4`
 - V0 rows: see [baseline_dev_eval.md](baseline_dev_eval.md).
 
 Cap 1 runs use `--max-iterations 25` as a cost guard (upstream sets no limit). It never decided an
@@ -137,6 +139,59 @@ run:
 - **Macro over Caps 1–4 with V5 and short history: 0.521** (Caps 1–3 from the V5 run; the patch
   changes only multi-turn histories, so it does not affect them).
 
+## Finding 5: following Cap 4's tool policies (V6, #10)
+
+Each Cap 4 dialogue may carry a tool policy in `additional_instructions`. Upstream only states it
+to the model as a system message, and **for single-turn dialogues not at all** (in
+`LangGraphReActAgent.run` the policy is added only when the input is a message list). In the V5
+run the agent followed none of them: 10 failed dialogues called a data tool where only document
+retrievers were allowed, and 3 called a retriever where retrievers were forbidden
+(`scripts/diagnostics.py`).
+
+Every policy in the 898 training dialogues is one of 4 templates over 12 topics. Document
+retrievers are the `query_*` tools. The gold answer is "I can not answer." **exactly** when only
+retrievers are allowed and the policy applies: always for the global form (65 / 65), and for the
+topic form when the topic is the domain's (68 / 68; 0 of the 79 others). Upstream's scorer gives
+full credit to such a refusal when no tool is called.
+
+`--policy-guard` (`scripts/policy_guard.py`):
+
+| Policy | Action |
+|---|---|
+| Only retrievers, applies | answer "I can not answer." with no tool call |
+| No retrievers, applies | the agent runs without the `query_*` tools |
+| Anything else | unchanged |
+
+A topic policy applies when it names the domain's topic. Known domains are looked up in
+`splits/cap4_domain_topics.json`, built from the gold of `train-rest` and `dev-seen` only, so no
+held-out (dev-eval) domain is in it. Other domains, including all of dev-eval's, get their topic
+from the agent's LLM, once per domain, from the domain's name and tool names. That call is right
+for 25 of the 29 labelled training domains (`policy_guard.py --check`). It disagrees with the
+benchmark on 4: book_publishing_company, music_tracker and talkingdata, plus world (Finance
+instead of Geography). The world disagreement changes no dev-eval decision.
+
+Live run (Cap 4 only, the short-history setup plus `--policy-guard`), item by item against the
+short-history run:
+
+| Dialogues | n | Correct before | Correct after | Won / lost |
+|---|---:|---:|---:|---|
+| Guard refused (all 11 gold refusals, nothing else) | 11 | 5 | **11** | +6 / −0 |
+| Run without retrievers | 5 | – | – | +1 / −0 |
+| Unchanged | 44 | – | – | +1 / −4 |
+| **Total** | **60** | **26** | **30** | |
+
+- **The guard refused exactly the 11 dialogues whose gold is a refusal**, as the offline
+  simulation predicted. 5 of them were already credited, through a crash, a lenient judge or an
+  answer with no tool call. They now score by design.
+- **The other changes are noise:** all 4 losses are on dialogues the guard did not touch (3 have no
+  policy).
+- **One "context too long" error is back.** It is a student_loan dialogue with a 106-character
+  history that failed the same way in the V5 run; it is not caused by the history.
+- **Macro over Caps 1–4 with V5, short history and V6: 0.538** (Caps 1–3 from the V5 run).
+- **On the official test set the guard matters more:** IBM's internal policy judge (not shipped;
+  `evaluator/scorer.py` loads it if present) scores a turn 0 when the policy is broken, and the
+  guard prevents both kinds of violation.
+
 ## Shortlist size
 
 128 tools was chosen over 50 for the fixed run: higher on both Cap 2 (0.450 vs 0.425) and Cap 3
@@ -162,8 +217,7 @@ Next targets, by size:
 - **Groundedness failures** (9–18% of items): V5, evidence-only answers. In Cap 1, 10 items have
   the right answer but fail the groundedness judge.
 - ~~**Cap 4 context length** (17%)~~: fixed by `--short-history` (#7, Finding 4).
-- **Cap 4 refusals:** still 0 deliberate refusals on the 11 unanswerable dialogues; policy guard
-  (V6, #10).
+- ~~**Cap 4 refusals**~~: V6 refuses all 11 unanswerable dialogues on purpose (#10, Finding 5).
 - **Remaining tool-call rejections** (2–6%): V3 (#8).
 
 ## Notes
