@@ -28,14 +28,14 @@ Ground rules:
 | 1 | Mon Nov 9 | ✅ **Fix the tool-schema bug.** Tools with no parameters get a required internal `config` field, so Groq rejects correct calls. | Anurag | – | No "missing argument" rejections on `smoke` |
 | 2 | Mon Nov 9 | ✅ **V2: hybrid tool shortlist** (BM25 + MiniLM fusion), swapped into IBM's agent at run time. Run on `dev-eval` Tasks 2–3 with 128 and 50 tools. | Aayush | – | Both runs scored |
 | 3 | Mon Nov 9 | ✅ **Task 1 baseline**: V0 once on `dev-eval` Task 1 (needed the tool-refresh fix below) | Aayush | – | Score in `results/` |
-| 4 | Tue Nov 10 | **V1: our own runner and agent.** Same output format as IBM's, trace logging, includes the schema fix. | Anurag | 1 | Scores within noise of V0 (with the fix) |
+| 4 | Tue Nov 10 | ❌ *(dropped Nov 10)* **V1: our own runner and agent.** Not needed: the run-time patches in `scripts/run_baseline.py` already carry every fix, and a parity run would cost a paid run we can't spare. Traces come from IBM's output files and run logs. | Anurag | 1 | – |
 | 5 | Tue Nov 10 | ✅ **Rerun V2 on top of the schema fix**; choose the shortlist size | Aayush | 1, 2 | Size chosen, run scored |
 | 6 | Tue Nov 10 | ✅ **Retriever ablations**: retriever type × shortlist size (offline, no cost) | Aayush | – | Table in `results/tool_recall.md` |
 | 7 | Tue Nov 10 | ✅ **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today). Cause: 10 dialogues (authors, menu) carry earlier answers of 0.3–9.4M characters. Patch ready as `--short-history` (first rows + total, ≤ 2,000 characters per answer); checked offline: largest history 2.3M → 1.6k tokens. Live: 0 context errors, Task 4 0.317 → 0.433 ([results](results/v2_and_fixes_dev_eval.md), Finding 4) | Aayush (from Piyush, Nov 10) | – | No "context too long" errors on `dev-eval` Task 4 |
-| 8 | Wed Nov 11 | **V3: tool-call checking**: validate each call against its schema and repair bad arguments | Anurag | 4 | Run scored |
-| 9 | Wed Nov 11 | ✅ *(negative result)* **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Fallback if V1 is late: a second retrieval round inside the shortlist only. | Aayush | 4 (or fallback) | Task 3 run scored |
+| 8 | Wed Nov 11 | **V3: tool-call repair**, as one more run-time patch: when Groq rejects a tool call (HTTP 400, tool-call validation), show the model the error and let it retry once. Small on purpose: after the schema fix only 1.7% (Task 2) and 5.7% (Task 3) of items are still lost to rejected calls. | Anurag | 1 | Checked offline (no rejected call ends an item); scored in the final run (#15) |
+| 9 | Wed Nov 11 | ✅ *(negative result)* **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Done as the fallback (a second retrieval round inside the shortlist), since V1 was dropped. | Aayush | – | Task 3 run scored |
 | 10 | Wed Nov 11 | **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool | Piyush | 7 | Task 4 run scored |
-| 11 | Wed Nov 11 | **Diagnostics script** over V1's traces | Piyush | 4 | Runs on any V1+ run |
+| 11 | Wed Nov 11 | **Diagnostics script** over the trajectories in IBM's output files and run logs | Piyush | – | Runs on any run folder |
 | 12 | Tue–Wed | **V5: write the answer only from tool evidence** (13% of items fail only the groundedness check). Offline test: +10 of 25 on Tasks 2–4 ([results](results/groundedness_dev_eval.md)); patch ready as `--evidence-answer` | Aayush | – | Run scored |
 | 13 | Thu Nov 12 | **Error analysis**: about 20 failed items per task, with example traces | Piyush | 11 | Section drafted |
 | 14 | Thu–Fri | **Report sections drafted:** method and system *(Anurag)*, tool retrieval and Tasks 2–3 *(Aayush)*, Task 4 and error analysis *(Piyush)* | All | – | Draft in `report/` |
@@ -51,16 +51,20 @@ Ground rules:
 evidence, so no live patch or paid run;
 V5 (#12) offline test and full run in [results/groundedness_dev_eval.md](results/groundedness_dev_eval.md) (macro 0.453 → 0.492). #7 (short Task 4 history, Aayush) recovers 6 of the 10 dialogues that did not fit: Task 4 0.317 → 0.433, macro 0.521. Also done, not planned: a
 fix for upstream's stale Cap 1 tool list (`--refresh-tools`, Aayush), without which Task 1 could not
-be scored. Open question for the team: whether #4 (V1) is still needed, since the run-time patches
-in `scripts/run_baseline.py` already carry both fixes and V2.
+be scored.
+
+**Decided 2026-11-10 (whole team):** #4 (V1) is dropped. Every variant is a run-time patch in
+`scripts/run_baseline.py` (retry, `--retriever`, `--fix-tool-schema`, `--refresh-tools`,
+`--short-history`, `--evidence-answer`), so IBM's code stays unchanged. V3 (#8) becomes one more
+patch, and the diagnostics (#11) read IBM's output files and run logs.
 
 ## The same tasks, by person
 
 ### Anurag: agent core
 
-1. Fix the tool-schema bug (#1). **Mon Nov 9**
-2. V1: own runner and agent (#4). Tue Nov 10
-3. V3: tool-call checking and repair (#8). Wed Nov 11
+1. ✅ Fix the tool-schema bug (#1), `--fix-tool-schema`. Mon Nov 9
+2. ❌ V1: own runner and agent (#4), dropped Nov 10
+3. V3: tool-call repair as a run-time patch (#8). **Wed Nov 11**
 4. Report: method and system sections (#14). Thu–Fri
 5. Final report, reproducibility check, submission (#17–19). Sat–Sun
 
@@ -80,16 +84,15 @@ in `scripts/run_baseline.py` already carry both fixes and V2.
 ### Piyush: Task 4 and analysis
 
 1. V6: policy guard and deliberate refusals (#10). Wed Nov 11
-2. Diagnostics script over the traces (#11). Wed Nov 11
+2. Diagnostics script over IBM's output files and run logs (#11). Wed Nov 11
 3. Error analysis (#13). Thu Nov 12
 4. Report: Task 4 and error-analysis sections (#14). Thu–Fri
 5. Final report (#17). Sat Nov 14
 
 ## Risks
 
-- **Anurag's tasks are the critical path.** Tasks 5, 8, 9, 11 and 12 build on the schema fix or
-  V1. If V1 is not ready by Tue night, apply the fixes as run-time patches on IBM's agent (as V2
-  does) and score every variant that way.
+- **No own agent (V1).** Every variant is a run-time patch on IBM's agent, so changes that need
+  control over the agent loop are out of scope. The report states this as a design choice.
 - **Small samples.** Task 3 has 35 items (±0.16) and Task 4 has 60 (±0.12). A variant has to gain
   several items before it counts as an improvement. The report says so rather than claiming
   small gains.
