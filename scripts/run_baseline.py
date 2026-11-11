@@ -9,7 +9,8 @@ patched in at run time; upstream's code is not modified. --fix-tool-schema adds 
 zero-parameter tool-schema fix (SCHEMA_PATCH) to either. --refresh-tools fixes upstream's Cap 1
 tool list going stale (see REFRESH_PATCH). --evidence-answer is V5: the final answer is rewritten
 from the run's tool results only (ANSWER_PATCH, answer_rewrite.py). --short-history shortens long
-earlier answers in Cap 4 dialogue histories (HISTORY_PATCH, short_history.py).
+earlier answers in Cap 4 dialogue histories (HISTORY_PATCH, short_history.py). --policy-guard is V6:
+Cap 4's tool policies are followed, not only stated (POLICY_PATCH, policy_guard.py).
 
 Usage:
     python scripts/run_baseline.py --split smoke --caps 1 2 3
@@ -121,6 +122,60 @@ _from_dict = BenchmarkItem.from_dict.__func__
 BenchmarkItem.from_dict = classmethod(lambda cls, data: _from_dict(cls, shorten_dialogue(data)))
 """
 
+# V6 (--policy-guard): Cap 4 dialogues carry a tool policy that upstream only states to the model
+# (and, for single-turn dialogues, not at all). Here the policy is followed (policy_guard.py):
+# "only document retrievers" -> "I can not answer." with no tool call, as the gold does in every
+# training dialogue; "no document retrievers" -> the agent runs without the query_* tools. A
+# topic policy applies when it names the domain's topic. The domain comes from the MCP connect
+# call. Each decision is appended to <output>/v6_policy.jsonl.
+POLICY_PATCH = """
+sys.path.append({scripts_dir!r})
+import json, os
+import agents.agent_interface, benchmark.mcp_client
+from langchain_core.messages import HumanMessage
+from policy_guard import (REFUSAL, RETRIEVER_PREFIX, candidate_topics, known_topics, parse_policy,
+                          parse_topic, topic_prompt)
+_domain, _domain_topic = [""], known_topics()
+_connect = benchmark.mcp_client.create_client_and_connect
+def _connect_noting_domain(cfg, domain="", *args, **kwargs):
+    _domain[0] = domain
+    return _connect(cfg, domain, *args, **kwargs)
+benchmark.mcp_client.create_client_and_connect = _connect_noting_domain
+_policy_log = os.path.join(sys.argv[sys.argv.index("--output") + 1], "v6_policy.jsonl") if "--output" in sys.argv else None
+async def _topic_of(agent, topic, description):
+    domain = _domain[0]
+    if domain not in _domain_topic:
+        topics = candidate_topics(topic, description)
+        msg = await agent._llm.ainvoke([HumanMessage(content=topic_prompt(domain, [t.name for t in agent._tools], topics))])
+        _domain_topic[domain] = parse_topic(str(msg.content), topics)
+    return _domain_topic[domain]
+_policy_run = agents.agent_interface.LangGraphReActAgent.run
+async def _run_with_policy(self, input, additional_instructions=None, *args, **kwargs):
+    mode, topic, description = parse_policy(additional_instructions)
+    domain_topic = await _topic_of(self, topic, description) if topic else None
+    applies = mode is not None and (topic is None or domain_topic == topic)
+    action = ("refuse" if mode == "only" else "no retrievers") if applies else "unchanged"
+    if _policy_log and mode is not None:
+        os.makedirs(os.path.dirname(_policy_log), exist_ok=True)
+        with open(_policy_log, "a") as fh:
+            fh.write(json.dumps({{"domain": _domain[0], "mode": mode, "topic": topic,
+                                 "domain_topic": domain_topic, "action": action}}) + "\\n")
+    if action == "refuse":
+        return agents.agent_interface.AgentResponse(content=REFUSAL, all_tools=[t.name for t in self._tools])
+    if action == "no retrievers":
+        build, agent = self._build_agent, self._agent
+        allowed = lambda tools: [t for t in tools if not t.name.startswith(RETRIEVER_PREFIX)]
+        self._build_agent = lambda tools: build(allowed(tools))
+        self._agent = build(allowed(self._tools))
+        try:
+            return await _policy_run(self, input, additional_instructions, *args, **kwargs)
+        finally:
+            del self._build_agent
+            self._agent = agent
+    return await _policy_run(self, input, additional_instructions, *args, **kwargs)
+agents.agent_interface.LangGraphReActAgent.run = _run_with_policy
+"""
+
 # V5 (--evidence-answer): after the agent finishes, the same LLM rewrites its final answer from
 # that run's tool calls and results only (answer_rewrite.py). The tool calls, and so the replayed
 # evidence the judges see, are unchanged. Skipped when no tool was called, so Cap 4's
@@ -209,6 +264,8 @@ def main() -> int:
                     help="V5: rewrite the final answer from the run's tool results only")
     ap.add_argument("--short-history", action="store_true",
                     help="Cap 4: shorten long earlier answers in the dialogue history (first rows + total)")
+    ap.add_argument("--policy-guard", action="store_true",
+                    help="V6: follow Cap 4's tool policies (refuse when only retrievers are allowed)")
     ap.add_argument("--llm-max-retries", type=int, default=None,
                     help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
     ap.add_argument("--run-id", default=None, help="reuse to resume a run")
@@ -222,6 +279,7 @@ def main() -> int:
     variant += "rt" if args.refresh_tools else ""
     variant += "v5" if args.evidence_answer else ""
     variant += "sh" if args.short_history else ""
+    variant += "v6" if args.policy_guard else ""
     run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -236,6 +294,7 @@ def main() -> int:
                    + (" + tool refresh" if args.refresh_tools else "")
                    + (" + V5 evidence-only answer" if args.evidence_answer else "")
                    + (" + short history" if args.short_history else "")
+                   + (" + V6 policy guard" if args.policy_guard else "")
                    + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
@@ -250,6 +309,7 @@ def main() -> int:
         "refresh_tools": args.refresh_tools,
         "evidence_answer": args.evidence_answer,
         "short_history": args.short_history,
+        "policy_guard": args.policy_guard,
         "max_iterations": args.max_iterations,
         "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
@@ -278,6 +338,8 @@ def main() -> int:
             patches.append(REFRESH_PATCH)
         if args.short_history:
             patches.append(HISTORY_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
+        if args.policy_guard:
+            patches.append(POLICY_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         if args.evidence_answer:
             patches.append(ANSWER_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         runner = ["-c", SHIM.format(patches="".join(patches))] if patches else ["benchmark_runner.py"]

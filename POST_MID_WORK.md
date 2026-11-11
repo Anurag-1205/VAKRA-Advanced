@@ -34,8 +34,8 @@ Ground rules:
 | 7 | Tue Nov 10 | ✅ **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today). Cause: 10 dialogues (authors, menu) carry earlier answers of 0.3–9.4M characters. Patch ready as `--short-history` (first rows + total, ≤ 2,000 characters per answer); checked offline: largest history 2.3M → 1.6k tokens. Live: 0 context errors, Task 4 0.317 → 0.433 ([results](results/v2_and_fixes_dev_eval.md), Finding 4) | Aayush (from Piyush, Nov 10) | – | No "context too long" errors on `dev-eval` Task 4 |
 | 8 | Wed Nov 11 | **V3: tool-call repair**, as one more run-time patch: when Groq rejects a tool call (HTTP 400, tool-call validation), show the model the error and let it retry once. Small on purpose: after the schema fix only 1.7% (Task 2) and 5.7% (Task 3) of items are still lost to rejected calls. | Anurag | 1 | Checked offline (no rejected call ends an item); scored in the final run (#15) |
 | 9 | Wed Nov 11 | ✅ *(negative result)* **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Checked offline instead ([results](results/tool_recall.md)): even with the gold previous result, per-hop retrieval changes at most 1 of 35 items, so no live patch and no paid run. | Aayush | – | Offline check in `results/tool_recall.md` |
-| 10 | Wed Nov 11 | **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool | Piyush | 7 | Task 4 run scored |
-| 11 | Wed Nov 11 | **Diagnostics script** over the trajectories in IBM's output files and run logs | Piyush | – | Runs on any run folder |
+| 10 | Wed Nov 11 | **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool. Patch ready as `--policy-guard` (`scripts/policy_guard.py`): in all 898 training dialogues the gold refuses exactly when only document retrievers are allowed and the policy applies. Offline on `dev-eval`: refuses exactly the 11 gold refusals (6 fail today), no other dialogue | Aayush (from Piyush, Nov 11) | 7 | Task 4 run scored |
+| 11 | Wed Nov 11 | **Diagnostics script** over the trajectories in IBM's output files and run logs | Aayush (from Piyush, Nov 11) | – | Runs on any run folder |
 | 12 | Tue–Wed | **V5: write the answer only from tool evidence** (13% of items fail only the groundedness check). Offline test: +10 of 25 on Tasks 2–4 ([results](results/groundedness_dev_eval.md)); patch ready as `--evidence-answer` | Aayush | – | Run scored |
 | 13 | Thu Nov 12 | **Error analysis**: about 20 failed items per task, with example traces | Piyush | 11 | Section drafted |
 | 14 | Thu–Fri | **Report sections drafted:** method and system *(Anurag)*, tool retrieval and Tasks 2–3 *(Aayush)*, Task 4 and error analysis *(Piyush)* | All | – | Draft in `report/` |
@@ -77,17 +77,17 @@ patch, and the diagnostics (#11) read IBM's output files and run logs.
 5. V4: per-hop tool retrieval for Task 3 (#9). Wed Nov 11
 6. V5: evidence-only answers (#12), alone since Nov 10. Tue–Wed
 7. Shorten long answers in the Task 4 history (#7), taken over from Piyush on Nov 10. Tue
-8. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
-9. Final runs for all variants (#15). Fri Nov 13
-10. Final report and reproducibility check (#17–18). Sat Nov 14
+8. V6: policy guard and deliberate refusals (#10), taken over from Piyush on Nov 11. Wed
+9. Diagnostics script over IBM's output files and run logs (#11), taken over from Piyush on Nov 11. Wed
+10. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
+11. Final runs for all variants (#15). Fri Nov 13
+12. Final report and reproducibility check (#17–18). Sat Nov 14
 
 ### Piyush: Task 4 and analysis
 
-1. V6: policy guard and deliberate refusals (#10). Wed Nov 11
-2. Diagnostics script over IBM's output files and run logs (#11). Wed Nov 11
-3. Error analysis (#13). Thu Nov 12
-4. Report: Task 4 and error-analysis sections (#14). Thu–Fri
-5. Final report (#17). Sat Nov 14
+1. Error analysis (#13). Thu Nov 12
+2. Report: Task 4 and error-analysis sections (#14). Thu–Fri
+3. Final report (#17). Sat Nov 14
 
 ## Risks
 

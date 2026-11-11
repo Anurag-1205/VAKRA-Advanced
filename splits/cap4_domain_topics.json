@@ -1,0 +1,27 @@
+{
+ "_comment": "Built by scripts/policy_guard.py --write-topics from Cap 4 gold of ['train-rest', 'dev-seen']",
+ "topics": {
+  "address": "Geography & Demographics",
+  "airline": "Transportation & Mobility",
+  "app_store": "Technology & Software",
+  "beer_factory": "Food, Restaurants & Beverage",
+  "bike_share_1": "Transportation & Mobility",
+  "book_publishing_company": "Retail, Sales & Commerce",
+  "books": "Literature, Language & Publishing",
+  "computer_student": "Education & Students",
+  "cookbook": "Food, Restaurants & Beverage",
+  "food_inspection": "Food, Restaurants & Beverage",
+  "genes": "Health & Medicine",
+  "image_and_language": "Technology & Software",
+  "law_episode": "Movies, TV & Entertainment, Social Media",
+  "mondial_geo": "Geography & Demographics",
+  "music_tracker": "Movies, TV & Entertainment, Social Media",
+  "olympics": "Sports & Athletics",
+  "professional_basketball": "Sports & Athletics",
+  "restaurant": "Food, Restaurants & Beverage",
+  "shakespeare": "Literature, Language & Publishing",
+  "soccer_2016": "Sports & Athletics",
+  "talkingdata": "Movies, TV & Entertainment, Social Media",
+  "university": "Education & Students"
+ }
+}
