@@ -11,7 +11,8 @@ Groq rejects is retried once with the error shown (REPAIR_PATCH, tool_call_repai
 --refresh-tools fixes upstream's Cap 1 tool list going stale (see REFRESH_PATCH). --evidence-answer is V5: the final answer is rewritten
 from the run's tool results only (ANSWER_PATCH, answer_rewrite.py). --short-history shortens long
 earlier answers in Cap 4 dialogue histories (HISTORY_PATCH, short_history.py). --policy-guard is V6:
-Cap 4's tool policies are followed, not only stated (POLICY_PATCH, policy_guard.py).
+Cap 4's tool policies are followed, not only stated (POLICY_PATCH, policy_guard.py). --tools-first
+is V7: on Caps 2-3 the agent is told to try the tools and never ask the user back (TOOLS_FIRST_PATCH).
 
 Usage:
     python scripts/run_baseline.py --split smoke --caps 1 2 3
@@ -150,6 +151,24 @@ async def _agenerate_with_repair(self, messages, *args, **kwargs):
                 with open(_repairs, "a") as fh:
                     fh.write(json.dumps(entry, ensure_ascii=False) + "\\n")
 BaseChatOpenAI._agenerate = _agenerate_with_repair
+"""
+
+# V7 (--tools-first, Caps 2-3 only): upstream gives the agent no system message on Caps 2-3, and
+# it often answers without any tool call, saying no tool fits or asking the user to clarify: 18 of
+# 120 Cap 2 and 10 of 35 Cap 3 items in the V5 run, none correct (diagnostics.py, "no tool call").
+# Here every LLM call of the agent gets TOOLS_FIRST_RULE as a system message (LangGraph's prompt
+# argument), which is not added to the history, so the recorded trajectory is unchanged.
+TOOLS_FIRST_RULE = (
+    "Answer the user's question with the available tools. There is no user to reply to questions, "
+    "so never ask for clarification: if the question is ambiguous, choose the most reasonable "
+    "reading. Always call at least one tool before you answer, even when no tool name matches the "
+    "question exactly: a related tool, or several tools in turn, often return the data you need. "
+    "Only if the tool results do not contain the answer, say that it is not available."
+)
+TOOLS_FIRST_PATCH = """
+import agents.agent_interface
+agents.agent_interface.LangGraphReActAgent._build_agent = (
+    lambda self, tools: agents.agent_interface.create_react_agent(self._llm, tools, prompt={rule!r}))
 """
 
 # --short-history (#7): upstream puts every earlier Cap 4 turn's gold answer into the history
@@ -310,6 +329,8 @@ def main() -> int:
                     help="Cap 4: shorten long earlier answers in the dialogue history (first rows + total)")
     ap.add_argument("--policy-guard", action="store_true",
                     help="V6: follow Cap 4's tool policies (refuse when only retrievers are allowed)")
+    ap.add_argument("--tools-first", action="store_true",
+                    help="V7, Caps 2-3: a system rule to try the tools before answering and never ask the user back")
     ap.add_argument("--llm-max-retries", type=int, default=None,
                     help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
     ap.add_argument("--run-id", default=None, help="reuse to resume a run")
@@ -325,6 +346,7 @@ def main() -> int:
     variant += "v5" if args.evidence_answer else ""
     variant += "sh" if args.short_history else ""
     variant += "v6" if args.policy_guard else ""
+    variant += "v7" if args.tools_first else ""
     run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -341,6 +363,7 @@ def main() -> int:
                    + (" + V5 evidence-only answer" if args.evidence_answer else "")
                    + (" + short history" if args.short_history else "")
                    + (" + V6 policy guard" if args.policy_guard else "")
+                   + (" + V7 tools-first rule (Caps 2-3)" if args.tools_first else "")
                    + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
@@ -357,6 +380,7 @@ def main() -> int:
         "evidence_answer": args.evidence_answer,
         "short_history": args.short_history,
         "policy_guard": args.policy_guard,
+        "tools_first": args.tools_first,
         "max_iterations": args.max_iterations,
         "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
@@ -385,6 +409,8 @@ def main() -> int:
             patches.append(REPAIR_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         if args.refresh_tools:
             patches.append(REFRESH_PATCH)
+        if args.tools_first and cap_id in (2, 3):
+            patches.append(TOOLS_FIRST_PATCH.format(rule=TOOLS_FIRST_RULE))
         if args.short_history:
             patches.append(HISTORY_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         if args.policy_guard:
