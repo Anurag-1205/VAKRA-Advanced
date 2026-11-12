@@ -41,7 +41,7 @@ Ground rules:
 | 12c | Thu Nov 12 | ✅ **V8: case and multi-hop hints** (Tasks 2–3, not planned): two more sentences in V7's rule, for two patterns the #13 groundwork found (argument values in the wrong case; chains that stop after the first hop). Patch `--tool-hints` (with `--tools-first`). Live: Task 2 0.633 → 0.650, Task 3 unchanged; fixes the Task 3 wrong-case items (the agent retries in lowercase), not the Task 2 ones ([results](results/v2_and_fixes_dev_eval.md), Finding 7) | Aayush | 13 | Tasks 2–3 scored |
 | 13 | Thu Nov 12 | **Error analysis**: about 20 failed items per task, with example traces. Groundwork done Nov 12 (Aayush): `scripts/error_analysis.py` (one category per failed item, proportional sample to annotate) and a preliminary draft on the latest runs in [results/error_analysis.md](results/error_analysis.md): picking the wrong tool is 47–67% of failures in Tasks 2–4. To do after #15: re-run on the final run, annotate the sample, final numbers and examples | Aayush (from Piyush, Nov 12) | 11, 15 | Section drafted |
 | 14 | Thu–Fri | **Report sections drafted:** method and system *(Anurag)*, tool retrieval and Tasks 2–3 *(Aayush)*, Task 4 *(Piyush)*, error analysis *(Aayush, with #13)* | All | – | Draft in `report/` |
-| 15 | Fri Nov 13 | **Final runs**: the best configuration on all tasks | Aayush (runs), all | 1–12 | All final runs scored |
+| 15 | Fri Nov 13 | ✅ **Final runs**: the best configuration on all tasks. Done early, Thu Nov 12 (`scripts/run_final.sh`): Task 1 0.500, Task 2 0.625, Task 3 0.543, Task 4 0.583, macro 0.563 ([results](results/v2_and_fixes_dev_eval.md), "Final run") | Aayush (runs), all | 1–12 | All final runs scored |
 | 16 | **Fri Nov 13** | **Code freeze** (end of day) | All | 15 | – |
 | 17 | Sat Nov 14 | **Final report**: results table, ablation table, error analysis, limitations | All | 15 | Report complete |
 | 18 | Sat Nov 14 | **Reproducibility check**: every number in the report links to its run id; README steps work | Aayush + Anurag | 17 | Checked |
@@ -86,7 +86,7 @@ patch (`--repair-tool-calls`, with `--policy-guard` added since), and the diagno
     V8: case and multi-hop hints for Tasks 2–3 (#12c), added Nov 12. Thu
 11. Error analysis (#13), taken over from Piyush on Nov 12: groundwork Thu, final numbers and annotation after #15. Fri
 12. Report: tool retrieval, Tasks 2–3 and error-analysis sections (#14). Thu–Fri
-13. Final runs for all variants (#15). Fri Nov 13
+13. ✅ Final runs for all variants (#15). Done Thu Nov 12
 14. Final report and reproducibility check (#17–18). Sat Nov 14
 
 ### Piyush: Task 4 and analysis

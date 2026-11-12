@@ -24,6 +24,7 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 | + V6 policy guard (`--policy-guard`, Cap 4 only, Nov 11; see Finding 5) | – | – | – | **0.500 (30)** |
 | + V7 tools-first rule (`--tools-first`, Caps 2–3 only, Nov 12; see Finding 6) | – | **0.633 (76)** | 0.486 (17) | – |
 | + V8 case and multi-hop hints (`--tool-hints`, Caps 2–3 only, Nov 12; see Finding 7) | – | **0.650 (78)** | 0.486 (17) | – |
+| **Final run** (#15): all of the above + V3 `--repair-tool-calls`, all tasks in one run (Nov 12; see below) | **0.500 (30)** | **0.625 (75)** | **0.543 (19)** | **0.583 (35)** |
 | 95% half-width | ±0.13 | ±0.09 | ±0.17 | ±0.12 |
 
 \* Cap 4 includes dialogues credited after an agent crash (unanswerable gold, no tool call): 3 for
@@ -46,6 +47,8 @@ Run ids:
 - + V5 + short history + V6, Cap 4: `20261111-1610-v2hybridfixrtv5shv6-groq-dev-eval-cap4`
 - + V5 + V7, Caps 2–3: `20261112-1144-v2hybridfixrtv5v7-groq-dev-eval-cap23`
 - + V5 + V7 + V8, Caps 2–3: `20261112-1632-v2hybridfixrtv5v7v8-groq-dev-eval-cap23`
+- **Final run** (`scripts/run_final.sh`): `20261112-1833-v2hybridfixv3rtv5shv6v7v8-groq-dev-eval-cap234` (Caps 2–4)
+  and `20261112-1833-v2hybridfixv3rtv5shv6v7v8-maxit25-groq-dev-eval-cap1` (Cap 1)
 - V0 rows: see [baseline_dev_eval.md](baseline_dev_eval.md).
 
 Cap 1 runs use `--max-iterations 25` as a cost guard (upstream sets no limit). It never decided an
@@ -278,6 +281,43 @@ Live run (Caps 2–3, the V7 setup plus `--tool-hints`), item by item against th
   targeted wins; there is no clear sign of harm on the other items, and Cap 4 is not affected.
 - **Macro over Caps 1–4 with V5, short history, V6, V7 and V8: 0.555.** Recommended for the final
   run, as a small, low-risk change.
+
+## Final run (#15, 2026-11-12)
+
+`scripts/run_final.sh` at commit `4431acb`: every flag of the final configuration (V2, schema
+fix, V3, tool refresh, V5, short history, V6, V7, V8), Caps 2–4 in one run and Cap 1 with
+`--max-iterations 25`, 18:33–19:41. The laptop slept for 2 minutes during Cap 1 (19:12–19:14);
+the run paused and resumed with no connection errors.
+
+| | Cap 1 | Cap 2 | Cap 3 | Cap 4 | Macro |
+|---|---:|---:|---:|---:|---:|
+| V0, official baseline | stopped | 0.408 (49) | 0.343 (12) | 0.350 (21)\* | – |
+| Best earlier run per task | 0.583 (35) | 0.650 (78) | 0.486 (17) | 0.500 (30) | 0.555 |
+| **Final run** | **0.500 (30)** | **0.625 (75)** | **0.543 (19)** | **0.583 (35)** | **0.563** |
+| Won / lost vs the earlier run | +2 / −7 | +3 / −6 | +5 / −3 | +6 / −1 | |
+| 95% half-width | ±0.13 | ±0.09 | ±0.17 | ±0.12 | |
+
+\* 0.300 without the 3 dialogues credited after a crash. The final Cap 4 run has 11 deliberate
+refusals (all 11 gold refusals) and no crash credit.
+
+Earlier runs compared: Cap 1 the V5 run, Caps 2–3 the V8 run, Cap 4 the V6 run. In every task the
+only new flag that acts on it is V3 (the other new flags apply to other tasks).
+
+- **Every change against the earlier runs is within noise**, as expected when the configuration
+  barely changed. Most flips are on the judges: in Cap 2, 5 of the 6 losses kept every gold tool
+  response and failed only groundedness; in Cap 4, 4 of the 6 wins were "not grounded" before.
+  Cap 1's −5 is 2 groundedness flips with the same calls, 1 more "not grounded", 3 different
+  tool paths that ended wrong, and 1 tool response too large for Groq (HTTP 413).
+- **V3 (tool-call repair) fired 4 times:** Groq rejected a call (a missing required argument, or a
+  tool not in the list) and the retry produced a valid call 3 times; once the model repeated the
+  mistake (`full_time_result` for `ftr`). Agent crashes from rejected calls: 1 in this run (Cap 3),
+  against 1 in Cap 2 and 2 in Cap 3 in the V8 run.
+- **Agent crashes in total: 7 of 275 items** (Cap 1: 2 HTTP 413, 1 context length, 1 recursion
+  limit; Cap 2: 1 context length; Cap 3: 1 rejected call; Cap 4: 1 context length, the same
+  student_loan dialogue as in every run).
+- **Against the official baseline:** Cap 2 0.408 → 0.625, Cap 3 0.343 → 0.543, Cap 4 0.350 →
+  0.583 (0.300 → 0.583 without crash credit), and Cap 1 from unscorable to 0.500. The Cap 2 and
+  Cap 4 gains are larger than the 95% half-widths; Cap 3's (+7 items) is just above its ±0.17.
 
 ## Shortlist size
 
