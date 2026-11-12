@@ -43,23 +43,24 @@ Scoring replays our tool calls against the live APIs. The full scoring rules are
 
 ## Status
 
-**Phase 0 (2026-10-27): environment working for Caps 1–3, baseline blocked by free-tier limits.**
-Details and evidence: [results/phase0.md](results/phase0.md).
+**Experiments done (2026-11-12); final run on Nov 13, code freeze at the end of that day.**
+Everything is scored on `dev-eval` (held-out training domains; the official test set is pending).
 
-- **Working:**
-  - data download (public train split)
-  - committed dev splits
-  - Docker image and Cap 1–3 containers
-  - MCP connections and tool checksums
-  - Groq API and tool calling
-  - V0 baseline runner and official evaluator, end to end
-- **First scores** (smoke split, gpt-oss-120b on Groq, top-k-tools 32): Cap 2 **4/6**,
-  Cap 3 **0/4**.
-- **Blocked:**
-  - Default V0 (top-k 128) can't fit Groq's free tier (8K tokens/min).
-  - Gemini 3.x fails multi-step tool calls through upstream's agent.
-  - Cap 4 needs more RAM than this laptop has.
-  - No dev-heldout baseline yet.
+| | Task 1 | Task 2 | Task 3 | Task 4 |
+|---|---:|---:|---:|---:|
+| Official baseline (V0) | stopped† | 0.408 | 0.343 | 0.350 |
+| Our system so far | 0.583 | 0.650 | 0.486 | 0.500 |
+
+† Upstream's runner gives Task 1 agents a stale tool list; see
+[results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md) (Finding 2).
+
+- **Results:** [results/](results/), starting with
+  [v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md) (all scores, Findings 1–7) and
+  [error_analysis.md](results/error_analysis.md).
+- **Report:** [report/final_report.tex](report/final_report.tex) (draft); midterm report in
+  [report/Phase_1_report.pdf](report/Phase_1_report.pdf).
+- **Task list:** [POST_MID_WORK.md](POST_MID_WORK.md). Phase 0 setup notes:
+  [results/phase0.md](results/phase0.md).
 
 ## Setup
 
@@ -100,7 +101,7 @@ python scripts/download_data.py --domains authors cars european_football_1 hocke
 #    (upstream's covers only the gated test split).
 scripts/build_image.sh                       # = upstream `make build`, with CPU-only torch
 (cd scripts && python make_cap1_mapping.py)  # writes generated/configs/ (gitignored)
-CONFIGS_DIR=generated/configs scripts/containers.sh start 1 2 3
+CONFIGS_DIR=generated/configs scripts/containers.sh start 1 2 3   # add 4 for Task 4 (needs ≥ 8 GB RAM)
 scripts/containers.sh status
 python scripts/inspect_tools.py --cap 2 --domains hockey   # MCP + checksum check, tool sizes
 
@@ -108,7 +109,29 @@ python scripts/inspect_tools.py --cap 2 --domains hockey   # MCP + checksum chec
 #    On Groq's free tier, default top-k (128) is rejected as too large; 32 fits.
 python scripts/run_baseline.py --split smoke --caps 2 3 --top-k-tools 32
 python scripts/evaluate.py --run-id <run_id printed above>
+
+# 7. Our final system on dev-eval, all four tasks, scored (about 2 h and $2-2.50 on Groq's paid tier)
+scripts/run_final.sh
 ```
+
+**Our changes** are run-time patches that `scripts/run_baseline.py` applies before upstream's
+runner starts, each behind a flag (details and measured effects in
+[results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md)):
+
+| Flag | Tasks | What it does |
+|---|---|---|
+| `--fix-tool-schema` | all | Tools without parameters get an empty schema; Groq rejected the one LangChain inferred |
+| `--refresh-tools` | 1 | Re-lists the tools after Task 1's per-item tool set switches (upstream bug) |
+| `--short-history` | 4 | Shortens long earlier answers in the dialogue history (first rows plus the total) |
+| `--retriever hybrid` | 2–4 | **V2:** BM25 + MiniLM tool shortlist (reciprocal-rank fusion) |
+| `--repair-tool-calls` | all | **V3:** a tool call the API rejects is retried once, with the error shown |
+| `--evidence-answer` | all | **V5:** the final answer is rewritten from the tool results only |
+| `--policy-guard` | 4 | **V6:** Task 4's tool policies are enforced (deliberate refusals, retrievers removed) |
+| `--tools-first` | 2–3 | **V7:** a system rule to try the tools first and never ask the user back |
+| `--tool-hints` | 2–3 | **V8:** with `--tools-first`, hints on case-sensitive values and multi-hop questions |
+
+Other useful options: `--top-k-tools` (shortlist size, default 128), `--max-iterations` (cost
+guard; Task 1 runs use 25), `--llm-max-retries 8` (rate limits), `--run-id <id>` (resume a run).
 
 Notes:
 
@@ -123,6 +146,10 @@ Notes:
   `sudo apt install docker-compose-v2`.
 - **Splits:** [`splits/`](splits/) holds committed uuid lists. Rebuild or verify them with
   `scripts/make_splits.py`.
+- **Docker group:** if `docker` says "permission denied" although you are in the `docker` group
+  (a session started before you were added), run the scripts through `sg docker -c "..."`.
+- **Diagnostics for a scored run:** `scripts/failure_breakdown.py`, `scripts/diagnostics.py` and
+  `scripts/error_analysis.py`, each with `--run-id <run_id>`.
 - **Runs:** results land in `runs/<run_id>/` (gitignored):
   - `config.json` (models, SHAs, counts, timings)
   - `output/` (official submission format)
