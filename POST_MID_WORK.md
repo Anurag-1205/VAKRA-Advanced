@@ -38,8 +38,8 @@ Ground rules:
 | 11 | Wed Nov 11 | ✅ **Diagnostics script** over the trajectories in IBM's output files and run logs: `scripts/diagnostics.py --run-id <run> [--show N] [--jsonl F]` (11 flags per item, failed vs correct table, example traces). First finding: answering without any tool call (often asking the user back) is in 18 of 50 Task 2 and 10 of 18 Task 3 failures of the V5 run, and in no correct item | Aayush (from Piyush, Nov 11) | – | Runs on any run folder |
 | 12 | Tue–Wed | ✅ **V5: write the answer only from tool evidence** (13% of items fail only the groundedness check). Offline test: +10 of 25 on Tasks 2–4 ([results](results/groundedness_dev_eval.md)); patch ready as `--evidence-answer`. Live on all 4 tasks: macro 0.453 → 0.492 (Task 1 0.450 → 0.583, Task 2 0.558 → 0.583, Tasks 3–4 unchanged); each rewrite is logged to `v5_drafts.jsonl` since Nov 10 | Aayush | – | Run scored |
 | 12b | Thu Nov 12 | ✅ **V7: tools-first rule** (Tasks 2–3, not planned): a system message to try the tools before answering and never ask the user back, for the biggest failure pattern #11 found (28 items answered with no tool call, none correct). Patch `--tools-first`. Live: Task 2 0.583 → 0.633, Task 3 unchanged; no-tool-call items 28 → 3, ask-backs 13 → 0 ([results](results/v2_and_fixes_dev_eval.md), Finding 6) | Aayush | 11 | Tasks 2–3 scored |
-| 13 | Thu Nov 12 | **Error analysis**: about 20 failed items per task, with example traces. Groundwork done Nov 12 (Aayush): `scripts/error_analysis.py` (one category per failed item, proportional sample to annotate) and a preliminary draft on the latest runs in [results/error_analysis.md](results/error_analysis.md): picking the wrong tool is 47–67% of failures in Tasks 2–4. To do after #15: re-run on the final run, annotate the sample, final numbers and examples | Piyush (groundwork: Aayush) | 11, 15 | Section drafted |
-| 14 | Thu–Fri | **Report sections drafted:** method and system *(Anurag)*, tool retrieval and Tasks 2–3 *(Aayush)*, Task 4 and error analysis *(Piyush)* | All | – | Draft in `report/` |
+| 13 | Thu Nov 12 | **Error analysis**: about 20 failed items per task, with example traces. Groundwork done Nov 12 (Aayush): `scripts/error_analysis.py` (one category per failed item, proportional sample to annotate) and a preliminary draft on the latest runs in [results/error_analysis.md](results/error_analysis.md): picking the wrong tool is 47–67% of failures in Tasks 2–4. To do after #15: re-run on the final run, annotate the sample, final numbers and examples | Aayush (from Piyush, Nov 12) | 11, 15 | Section drafted |
+| 14 | Thu–Fri | **Report sections drafted:** method and system *(Anurag)*, tool retrieval and Tasks 2–3 *(Aayush)*, Task 4 *(Piyush)*, error analysis *(Aayush, with #13)* | All | – | Draft in `report/` |
 | 15 | Fri Nov 13 | **Final runs**: the best configuration on all tasks | Aayush (runs), all | 1–12 | All final runs scored |
 | 16 | **Fri Nov 13** | **Code freeze** (end of day) | All | 15 | – |
 | 17 | Sat Nov 14 | **Final report**: results table, ablation table, error analysis, limitations | All | 15 | Report complete |
@@ -82,14 +82,15 @@ patch (`--repair-tool-calls`, with `--policy-guard` added since), and the diagno
 9. Diagnostics script over IBM's output files and run logs (#11), taken over from Piyush on Nov 11. Wed
 10. V3: tool-call repair (#8), taken over from Anurag on Nov 12. Thu
     V7: tools-first rule for Tasks 2–3 (#12b), added Nov 12. Thu
-11. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
-12. Final runs for all variants (#15). Fri Nov 13
-13. Final report and reproducibility check (#17–18). Sat Nov 14
+11. Error analysis (#13), taken over from Piyush on Nov 12: groundwork Thu, final numbers and annotation after #15. Fri
+12. Report: tool retrieval, Tasks 2–3 and error-analysis sections (#14). Thu–Fri
+13. Final runs for all variants (#15). Fri Nov 13
+14. Final report and reproducibility check (#17–18). Sat Nov 14
 
 ### Piyush: Task 4 and analysis
 
-1. Error analysis (#13). Thu Nov 12
-2. Report: Task 4 and error-analysis sections (#14). Thu–Fri
+1. ~~Error analysis (#13)~~, taken over by Aayush on Nov 12
+2. Report: Task 4 section (#14). Thu–Fri
 3. Final report (#17). Sat Nov 14
 
 ## Risks
