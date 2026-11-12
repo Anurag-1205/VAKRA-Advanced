@@ -152,6 +152,9 @@ def load_cap(run, cap_dir: str) -> list[dict]:
                 "score": d["score"], "outcome": outcome(d["score"], pred, meta),
                 "n_calls": len(turn.get("sequence", {}).get("tool_call", [])), "n_gold_calls": len(gold_calls),
                 "flags": diagnose(pred, gold_calls, entry["results"] if entry else [], policy),
+                "calls": [{"name": c["name"], "arguments": c.get("arguments")}
+                          for c in turn.get("sequence", {}).get("tool_call", [])],
+                "gold_calls": gold_calls, "gold_answer": str(g[-1].get("answer"))[:500],
                 "answer": (turn.get("answer") or "")[:500], "error": (pred.get("error") or "")[:200],
                 "judge": meta.get("score_explanation"), "log": entry["entries"] if entry else None,
             })
