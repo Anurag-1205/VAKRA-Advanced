@@ -311,7 +311,8 @@ only new flag that acts on it is V3 (the other new flags apply to other tasks).
 - **V3 (tool-call repair) fired 4 times:** Groq rejected a call (a missing required argument, or a
   tool not in the list) and the retry produced a valid call 3 times; once the model repeated the
   mistake (`full_time_result` for `ftr`). Agent crashes from rejected calls: 1 in this run (Cap 3),
-  against 1 in Cap 2 and 2 in Cap 3 in the V8 run.
+  against 1 in Cap 2 and 2 in Cap 3 in the V8 run and 2 in the Cap 1 V5 run (an invalid
+  JSON call and a missing argument), so 5 → 1 over the four tasks.
 - **Agent crashes in total: 7 of 275 items** (Cap 1: 2 HTTP 413, 1 context length, 1 recursion
   limit; Cap 2: 1 context length; Cap 3: 1 rejected call; Cap 4: 1 context length, the same
   student_loan dialogue as in every run).

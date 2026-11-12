@@ -22,7 +22,7 @@
 \titleformat{\subsection}{\small\bfseries}{\thesubsection}{0.4em}{}
 \titlespacing*{\subsection}{0pt}{0.6em}{0.1em}
 
-% Everything in red depends on the final run (#15, Nov 13) or is still to be written.
+% Everything in red is still to be written (error analysis on the final run, repo URL, contributions).
 \newcommand{\todo}[1]{\textcolor{red}{[#1]}}
 
 \begin{document}
@@ -54,8 +54,8 @@ we changed and what each change gained. In short:
 \item \textbf{Four agent-level changes} target the failures that remain: rewriting the final answer
   from the tool evidence only (V5), following Task~4's tool policies by construction (V6), a
   system rule to try the tools before answering (V7), and hints for case-sensitive values (V8).
-\item On our evaluation set, the final system scores \todo{final scores} on Tasks~1--4
-  (macro \todo{final macro}), against 0.408, 0.343 and 0.350 for the baseline on Tasks~2--4; the
+\item On our evaluation set, the final system scores 0.500, 0.625, 0.543 and 0.583 on Tasks~1--4
+  (macro 0.563), against 0.408, 0.343 and 0.350 for the baseline on Tasks~2--4; the
   baseline cannot complete Task~1 items at all. The largest remaining failure is choosing the wrong tool from a correct shortlist:
   \todo{47--67\%} of the failed items in Tasks~2--4.
 \end{itemize}
@@ -125,9 +125,35 @@ code is unchanged.}
 \end{center}
 
 \section{Results}
-\textbf{Final configuration.} \todo{Table 2: one row for the official baseline (V0) and one for
-the final run with all flags (Table 1 except V4), per task with 95\% half-widths and the macro
-average; run ids in Section~9. Fill in from the final run on Nov 13.}
+\textbf{Final configuration.} Table~2 compares the official baseline with our final system: one
+run with every change of Table~1 except V4, on all four tasks (run ids in Section~10).
+
+\begin{center}\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+ & Task 1 & Task 2 & Task 3 & Task 4 & Macro \\
+ & ($n{=}60$) & ($n{=}120$) & ($n{=}35$) & ($n{=}60$) & \\
+\midrule
+V0, official baseline & --$^{\dagger}$ & 0.408 (49) & 0.343 (12) & 0.350 (21)$^{\ast}$ & -- \\
+Final system          & \textbf{0.500} (30) & \textbf{0.625} (75) & \textbf{0.543} (19) & \textbf{0.583} (35) & \textbf{0.563} \\
+\midrule
+Gain                  & -- & +0.217 & +0.200 & +0.233 & \\
+95\% half-width       & $\pm$0.13 & $\pm$0.09 & $\pm$0.17 & $\pm$0.12 & \\
+\bottomrule
+\end{tabular}\\[0.2em]
+{\footnotesize \textbf{Table 2.} Official baseline against our final system on \texttt{dev-eval}
+(items correct in brackets). $^{\dagger}$Stopped: every completed item hit the iteration limit
+(Section~6). $^{\ast}$0.300 without the 3 dialogues credited after a crash; the final run has
+none.}
+\end{center}
+
+The gains on Tasks~2 and~4 are well beyond their 95\% half-widths, and Task~3's (+7 items) is
+just beyond it; Task~1 goes from unscorable to 0.500. Against the last row of each task in
+Table~3, the final run differs by $-5$, $-3$, $+2$ and $+5$ items on Tasks~1--4, all within
+noise and mostly groundedness verdicts that flip between runs; the only change new to any task
+is V3.
+Of its 275 items, 7 end with an agent error: a tool response or context too long for the API (5),
+the iteration limit (1, Task~1) and a rejected call (1, Task~3).
 
 \textbf{Ablation.} Table~3 adds one change at a time. Each row is its own run on
 \texttt{dev-eval}; a dash means the change does not apply to that task and the score carries
@@ -267,7 +293,11 @@ spellings in the same case. Task~2 rose from 0.633 to 0.650, within noise.
 with the API rejecting a call (invalid JSON or a missing required argument). V3 catches the
 rejection at the LLM call, shows the model the error and its rejected call, and retries once; the
 note is not kept in the history. It was tested offline against a LangGraph agent with a fake LLM
-and is scored only in the final run, where \todo{n of the rejected-call crashes disappear}.
+and is scored only in the final run. There Groq rejected 4 calls, a missing required argument
+or a tool not in the list, and the retry was valid 3 times; once the model repeated the same
+wrong argument name. Items ending on a rejected call fell from 5 in the last runs of Table~3
+(2, 1 and 2 on Tasks~1--3) to 1. Which items draw a rejection varies between runs, so this is
+a small effect, but no repaired item crashed.
 
 \section{Task 4: multi-turn dialogues under tool policies}
 
@@ -379,7 +409,14 @@ run is
 \texttt{-{}-tool-hints -{}-llm-max-retries 8}
 \end{center}
 and the same with \texttt{-{}-caps 1 -{}-max-iterations 25} for Task~1 (an iteration limit as a cost
-guard; the official runner sets none), each followed by \texttt{python scripts/evaluate.py -{}-run-id <run id>}. \todo{Final run ids.} The
+guard; the official runner sets none), each followed by \texttt{python scripts/evaluate.py -{}-run-id <run id>}.
+\texttt{scripts/run\_final.sh} runs and scores both (about 70 minutes and \$1.50). Our final runs, at commit
+\texttt{4431acb}, are
+\begin{center}\small
+\texttt{20261112-1833-v2hybridfixv3rtv5shv6v7v8-groq-dev-eval-cap234} (Tasks~2--4)\\
+\texttt{20261112-1833-v2hybridfixv3rtv5shv6v7v8-maxit25-groq-dev-eval-cap1} (Task~1).
+\end{center}
+The
 ablation rows of Table~3 come from the runs listed in \texttt{results/v2\_and\_fixes\_dev\_eval.md}.
 
 \textbf{Contributions.} \todo{Who did what.}

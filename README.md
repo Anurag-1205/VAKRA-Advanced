@@ -43,13 +43,13 @@ Scoring replays our tool calls against the live APIs. The full scoring rules are
 
 ## Status
 
-**Experiments done (2026-11-12); final run on Nov 13, code freeze at the end of that day.**
+**Final run done (2026-11-12); code freeze at the end of Nov 13.**
 Everything is scored on `dev-eval` (held-out training domains; the official test set is pending).
 
-| | Task 1 | Task 2 | Task 3 | Task 4 |
-|---|---:|---:|---:|---:|
-| Official baseline (V0) | stopped† | 0.408 | 0.343 | 0.350 |
-| Our system so far | 0.583 | 0.650 | 0.486 | 0.500 |
+| | Task 1 | Task 2 | Task 3 | Task 4 | Macro |
+|---|---:|---:|---:|---:|---:|
+| Official baseline (V0) | stopped† | 0.408 | 0.343 | 0.350 | – |
+| Our final system (`scripts/run_final.sh`) | 0.500 | 0.625 | 0.543 | 0.583 | 0.563 |
 
 † Upstream's runner gives Task 1 agents a stale tool list; see
 [results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md) (Finding 2).
