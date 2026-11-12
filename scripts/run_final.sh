@@ -6,7 +6,7 @@
 #   Cap 1:    the same flags plus --max-iterations 25, a cost guard (upstream sets no limit).
 #
 # The two runs go one after the other, so one machine's memory and the API rate limit are
-# shared by one run at a time. About 2 hours and $2-2.50 on Groq's paid tier (Nov 2026).
+# shared by one run at a time. About 70 minutes and $1.50 on Groq's paid tier (Nov 2026).
 #
 # Usage (from the repo root, containers 1-4 running, API_KEY in .env):
 #   scripts/run_final.sh                  # new run ids, stamped with the current time

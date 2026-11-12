@@ -105,5 +105,5 @@ patch (`--repair-tool-calls`, with `--policy-guard` added since), and the diagno
 - **The official test set is still pending.** Every score is on held-out training domains; the
   report states this as a limitation.
 - **Budget.** About $2 per variant. The plan above needs about 8–10 runs, roughly $15–20.
-  Spent so far (Groq dashboard, Nov 12, after the V7 and V8 checks): **$9.36** for every run since
-  Oct 29, judge included.
+  Spent so far (Groq dashboard, Nov 12, after the final run): **$10.82** for every run since
+  Oct 29, judge included. The final run (#15) cost $1.46.

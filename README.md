@@ -110,7 +110,7 @@ python scripts/inspect_tools.py --cap 2 --domains hockey   # MCP + checksum chec
 python scripts/run_baseline.py --split smoke --caps 2 3 --top-k-tools 32
 python scripts/evaluate.py --run-id <run_id printed above>
 
-# 7. Our final system on dev-eval, all four tasks, scored (about 2 h and $2-2.50 on Groq's paid tier)
+# 7. Our final system on dev-eval, all four tasks, scored (about 70 min and $1.50 on Groq's paid tier)
 scripts/run_final.sh
 ```
 

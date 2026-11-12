@@ -364,3 +364,5 @@ Next targets, by size:
   the V6 topic check (`policy_guard.py --check`); the dashboard does not split it by run.
 - **Cost, later on Nov 12 (Groq dashboard): project total $9.36.** The $1.65 since the note above
   covers the V7 and V8 check runs on Caps 2–3 (about $0.80 each, judge included).
+- **Cost of the final run (Nov 12, Groq dashboard): project total $10.82.** The final run
+  (Caps 1–4, judge included) cost $1.46.
