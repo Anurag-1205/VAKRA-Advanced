@@ -57,7 +57,7 @@ we changed and what each change gained. In short:
 \item On our evaluation set, the final system scores 0.500, 0.625, 0.543 and 0.583 on Tasks~1--4
   (macro 0.563), against 0.408, 0.343 and 0.350 for the baseline on Tasks~2--4; the
   baseline cannot complete Task~1 items at all. The largest remaining failure is choosing the wrong tool from a correct shortlist:
-  \todo{47--67\%} of the failed items in Tasks~2--4.
+  47--69\% of the failed items in Tasks~2--4, although a third of these have a questionable gold.
 \end{itemize}
 
 \section{Experimental setup}
@@ -279,7 +279,7 @@ results do not contain it. Items with no tool call fall from 28 to 3 and ask-bac
 Task~2 rises from 0.583 to 0.633 and Task~3 is unchanged. Most of the former no-tool items still
 fail, now by calling the wrong tool: the rule removes a refusal but does not find the right tool.
 
-The error analysis (Section~8) then showed two further patterns. In 5 items the agent called the
+A first error analysis on the V7 run (the method of Section~8) showed two further patterns. In 5 items the agent called the
 right tool with the right value in the wrong case (\texttt{venue='steamship'}, gold
 \texttt{'STEAMSHIP'}); the data is case-sensitive, the lookup returned 0, and the agent reported
 that. In 7 of 12 Task~3 wrong-tool failures, the chain stopped after the first hop. V8 adds two
@@ -325,53 +325,94 @@ dialogues the guard did not touch. On the official test set the guard should mat
 IBM's policy judge, which is not public, scores a turn 0 when a policy is broken.
 
 \section{Error analysis}
-\todo{Replace every number in this section with the final run's (scripts/error\_analysis.py
--{}-run-id <final run>), and pick the examples from the annotated sample of about 20 failed items
-per task. The text below is the preliminary version on the latest run of each task.}
-
-We give each failed item one category. The first split is the evaluator's own exact-match
-verdict: if every gold tool response is among the agent's, the tool part was right and the answer
-failed; otherwise the reason comes from comparing the agent's calls with the gold calls.
+We analyse the 116 failed items of the final run in two passes. First, every failed item gets one
+category automatically. The first split is the evaluator's own exact-match verdict: if every gold
+tool response is among the agent's, the tool part was right and the answer failed; otherwise the
+reason comes from comparing the agent's calls with the gold calls (Table~5). Second, we read a
+sample of 76 failed items in full (20 per task, all 16 for Task~3, drawn in proportion to the
+categories) and gave each one root cause (Table~6).
 
 \begin{center}\small
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Category & Task 1 & Task 2 & Task 3 & Task 4 \\
 \midrule
-Agent crash                                         & 4 & 1 & 1 & 2 \\
-Right answer, not grounded                          & 3 & 0 & 2 & 2 \\
-Right tool results, answer not grounded             & 1 & 9 & 1 & 6 \\
-Tool results missing: no tool call                  & 0 & 1 & 0 & 1 \\
-Tool results missing: different tool                & 10 & \textbf{23} & \textbf{12} & \textbf{14} \\
-Tool results missing: argument differs only in case & 0 & 4 & 1 & 0 \\
-Tool results missing: other argument value          & 7 & 6 & 1 & 5 \\
+Agent crash                                         & 4 & 1 & 1 & 1 \\
+Right answer, not grounded                          & 6 & 2 & 2 & 1 \\
+Right tool results, answer not grounded             & 1 & 10 & 0 & 2 \\
+Tool results missing: no tool call                  & 1 & 1 & 0 & 2 \\
+Tool results missing: different tool                & 13 & \textbf{21} & \textbf{11} & \textbf{14} \\
+Tool results missing: argument differs only in case & 0 & 3 & 0 & 0 \\
+Tool results missing: other argument value          & 5 & 7 & 2 & 5 \\
 \midrule
-Failed / items                                      & 25 / 60 & 44 / 120 & 18 / 35 & 30 / 60 \\
+Failed / items                                      & 30 / 60 & 45 / 120 & 16 / 35 & 25 / 60 \\
 \bottomrule
 \end{tabular}\\[0.2em]
-{\footnotesize \textbf{Table 5.} Failed items by category \todo{preliminary: V7 run for Tasks
-2--3, V6 run for Task 4, V5 run for Task 1}. No failed item is ``right tool results, wrong
-answer''.}
+{\footnotesize \textbf{Table 5.} All failed items of the final run by automatic category. No failed
+item is ``right tool results, wrong answer''.}
+\end{center}
+
+\begin{center}\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Root cause (hand-read) & Task 1 & Task 2 & Task 3 & Task 4 & All \\
+\midrule
+Wrong tool or wrong decomposition                         & 1 & 6 & 5 & 3 & 15 \\
+Wrong argument value (case, format, flag, threshold)      & 0 & 4 & 2 & 3 & 9 \\
+Gave up or stopped the chain early                        & 1 & 0 & 2 & 2 & 5 \\
+No tool call / documents instead of the data tool          & 1 & 1 & 0 & 2+3 & 7 \\
+Answer rendering (list cut or deduplicated, name for code) & 5 & 0 & 0 & 1 & 6 \\
+Answer adds or contradicts the tool results               & 1 & 1 & 1 & 1 & 4 \\
+Agent crash                                               & 3 & 1 & 1 & 1 & 6 \\
+\midrule
+Gold questionable or question ambiguous                   & 3 & 5 & 4 & 3 & 15 \\
+Judge error; answer supported by the tool results         & 5 & 2 & 1 & 1 & 9 \\
+\midrule
+Sampled                                                   & 20 & 20 & 16 & 20 & 76 \\
+\bottomrule
+\end{tabular}\\[0.2em]
+{\footnotesize \textbf{Table 6.} Root causes in a sample of 76 failed items. The last two rows are
+not clearly the agent's fault.}
 \end{center}
 
 \begin{itemize}
-\item \textbf{Choosing the tool is now the main failure} (47--67\% of failures in Tasks~2--4),
-  although the gold tool is in the shortlist. In Task~2 the model picks a plausible neighbour
-  (``shoutouts in 1977'' $\rightarrow$ \texttt{get\_sum\_sho\_by\_year} instead of a count of
-  shutouts); some gold choices are hard to infer from names at all (``the car with the best crash
-  protection'' $\rightarrow$ \texttt{get\_heaviest\_car\_details}). In Task~3 the chain breaks at
-  the second hop. In Task~4 the agent splits one composite gold tool into many simple calls, or
-  queries documents where the gold uses a data tool. For Task~1, ``different tool'' is a weak
-  signal: it has many equivalent tool paths, and 26 of its 35 correct items also skip a gold tool.
-\item \textbf{Argument values in the wrong case} (5 items in Tasks~2--3). The model cannot know
-  the stored case from the question; V8 recovers it only when the model retries.
-\item \textbf{Groundedness} is still 21\% of failures (24 of 117). Many are the evaluator limit
-  from Section~6, where the answer restates a condition that lives in the tool's arguments; the
-  others add a unit or an inference the tool output does not contain.
-\item \textbf{Crashes are rare} (8 of 117): rejected tool calls (3, V3's target), tool responses
-  too large for the API (2), and single context-length and recursion-limit failures.
+\item \textbf{Choosing the tool is the main agent failure.} ``Different tool'' is 47--69\% of
+  failures in Tasks~2--4, although the gold tool is in the shortlist (Section~5). In Task~2 the
+  model picks a plausible neighbour; in Tasks~2 and~4 it rebuilds a composite gold tool from
+  simpler ones and loses the gold response; in Task~3 the first hop is often already wrong; in
+  Task~4, 3 sampled dialogues search the documents 6--18 times with near-identical queries and
+  never try the data tool.
+\item \textbf{A third of the ``different tool'' failures have a questionable gold} (13 of 38
+  sampled). The gold's second call ignores what the first found, a gold argument contradicts the
+  question (\texttt{get\_city\_count\_by\_name("PHL")} $=0$ for ``How many cities are in the
+  Philippines?''; position \texttt{"D"}, defence, for ``which goalie''), or the gold answers another
+  quantity (25 rows for ``how many times was the Ford Maverick introduced'', where the agent counts
+  5 model years). Over all categories it is 15 of 76. These items cap every system's score; we
+  leave them in.
+\item \textbf{Arguments} (9 of 76): case (\texttt{'steamship'} for \texttt{'STEAMSHIP'}), format
+  (\texttt{'peace corps'} for \texttt{'peace\_corps'}), swapped years, ``more than 5'' passed as 6,
+  and boolean flags whose meaning the tool name hides. V8's case retry works when the agent uses it
+  (Example~2), but not reliably.
+\item \textbf{Groundedness} is 21\% of failures (24 of 116), and in the sample about half of it is
+  the judge (7 of 15): it sees only the first 3 values of a data handle, or misreads a long list.
+  The other half are real: an added unit, or a fact from world knowledge in place of a skipped hop.
+\item \textbf{Task~1 fails mostly on the final answer}: 5 of 20 sampled items render it unlike the
+  gold (a country name for a code, a deduplicated list) and 5 are judge errors.
+\item \textbf{Crashes are rare} (7 of 116): 5 requests or contexts too large for the API, one
+  iteration limit, and one rejected call that V3's retry repeated.
 \end{itemize}
-\todo{Add 2--3 annotated example traces from the final sample.}
+
+\textbf{Examples.} (1)~\emph{Plausible neighbour, Task~2.} ``How many shoutouts are there in the
+regular season of 1977?'' The agent calls \texttt{get\_sum\_sho\_by\_year(1977)}, gets 0 and answers
+0; the gold is \texttt{get\_count\_combined\_shutouts\_\allowbreak by\_year\_and\_role(1977, "R")} $=2$.
+(2)~\emph{Chain stops, Task~3.} ``Among the car models introduced in 1970, how many have the same
+origin country as the Ford Torino produced in 1970?'' The country lookup for \texttt{"Ford Torino"}
+returns nothing; following V8 the agent retries \texttt{"ford torino"} and gets USA, then answers that the count ``isn't retrievable'' instead of calling the gold's count tool for
+USA and 1970 ($=45$). (3)~\emph{Questionable
+gold, Task~3.} ``Among the authors of the paper published in 2003 by [an affiliation], how many are
+affiliated with Cairo Microsoft Innovation Lab?'' The agent finds the paper, asks for its authors
+with that affiliation, gets none and answers 0; the gold's second call asks about
+``University of Tokyo'' and expects 1.
 
 \section{Limitations and future work}
 \begin{itemize}
@@ -383,6 +424,8 @@ answer''.}
   curated items.
 \item \textbf{One model.} Every run uses \texttt{gpt-oss-120b} on Groq, also as the judge. We did
   not test whether the changes transfer to other models.
+\item \textbf{Gold quality.} In our sample, 15 of 76 failed items have a questionable gold call or
+  answer (Section~8). We report scores as the official evaluator gives them.
 \item \textbf{The evaluator's judges.} The groundedness judge cannot see tool arguments, which caps
   every system's score, and Task~1's groundedness verdicts are unstable on re-scoring. Task~4's
   policy judge is not public, so policy compliance is only measured indirectly.
