@@ -75,8 +75,10 @@ by task:
 in another case: `venue='steamship'` (gold `'STEAMSHIP'`), `sponsor='Republican House'` (gold
 `'REPUBLICAN HOUSE'`), `school='OCC'` (gold `'occ'`). The data is case-sensitive, the tool returns
 0 or nothing, and the agent reports "0" or "not found". The model cannot know the stored case from
-the query alone. Not fixed; a candidate for future work (retry a lookup that returns nothing with
-other casings).
+the query alone. V8 (`--tool-hints`, Finding 7 in [v2_and_fixes_dev_eval.md](v2_and_fixes_dev_eval.md))
+tells the agent to retry such a lookup in other capitalizations: it fixed the Cap 3 item and two
+cars items whose chain had stopped at hop 1 for the same reason, but none of the 4 Cap 2 items. A
+retry in the tool layer, not left to the model, is future work.
 
 **3. Groundedness is still 21% of failures (24 of 117)**, even with V5. In Cap 2, 5 of the 9 "right
 tool results, not grounded" answers restate conditions from the query (a year, an affiliation,

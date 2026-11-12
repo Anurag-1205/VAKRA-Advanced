@@ -23,6 +23,7 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 | + short history (`--short-history`, Cap 4 only, Nov 10; see Finding 4) | – | – | – | **0.433 (26)\*** |
 | + V6 policy guard (`--policy-guard`, Cap 4 only, Nov 11; see Finding 5) | – | – | – | **0.500 (30)** |
 | + V7 tools-first rule (`--tools-first`, Caps 2–3 only, Nov 12; see Finding 6) | – | **0.633 (76)** | 0.486 (17) | – |
+| + V8 case and multi-hop hints (`--tool-hints`, Caps 2–3 only, Nov 12; see Finding 7) | – | **0.650 (78)** | 0.486 (17) | – |
 | 95% half-width | ±0.13 | ±0.09 | ±0.17 | ±0.12 |
 
 \* Cap 4 includes dialogues credited after an agent crash (unanswerable gold, no tool call): 3 for
@@ -44,6 +45,7 @@ Run ids:
 - + V5 + short history, Cap 4: `20261110-2302-v2hybridfixrtv5sh-groq-dev-eval-cap4`
 - + V5 + short history + V6, Cap 4: `20261111-1610-v2hybridfixrtv5shv6-groq-dev-eval-cap4`
 - + V5 + V7, Caps 2–3: `20261112-1144-v2hybridfixrtv5v7-groq-dev-eval-cap23`
+- + V5 + V7 + V8, Caps 2–3: `20261112-1632-v2hybridfixrtv5v7v8-groq-dev-eval-cap23`
 - V0 rows: see [baseline_dev_eval.md](baseline_dev_eval.md).
 
 Cap 1 runs use `--max-iterations 25` as a cost guard (upstream sets no limit). It never decided an
@@ -233,6 +235,50 @@ Live run (Caps 2–3, the V5 setup plus `--tools-first`), item by item against t
 - **Macro over Caps 1–4 with V5, short history, V6 and V7: 0.551** (Cap 1 from the V5 run, Cap 4
   from the V6 run). Recommended for the final run.
 
+## Finding 7: V8, hints on case-sensitive values and multi-hop questions (2026-11-12)
+
+The error analysis of the V7 run ([error_analysis.md](error_analysis.md)) found two patterns a
+prompt could reach. In 5 Cap 2–3 items, the agent called the right tool with the right value in
+another case (`'steamship'`, gold `'STEAMSHIP'`): the data is case-sensitive, the lookup returned 0
+or nothing, and the agent reported that. In 7 of 12 Cap 3 wrong-tool failures, the chain stopped
+after the first hop.
+
+`--tool-hints` (V8, with `--tools-first`) adds two sentences to V7's rule (`TOOL_HINTS` in
+`run_baseline.py`): if a lookup returns nothing, an empty list or 0, call it again with the value
+in other capitalizations (ALL CAPS, all lowercase); if the question has several parts, keep calling
+tools until every part is answered, passing earlier results on.
+
+Live run (Caps 2–3, the V7 setup plus `--tool-hints`), item by item against the V7 run:
+
+| | Cap 2 | Cap 3 |
+|---|---:|---:|
+| Score | 0.633 (76) → **0.650 (78)** | 0.486 (17) → 0.486 (17) |
+| Items won / lost | +5 / −3 | +5 / −5 |
+| V7's wrong-case items now correct | 0 of 4 | 1 of 1 |
+| V7's hop-2 breaks now correct | – | 2 of 7 |
+| Tool calls | 192 → 206 | 127 → 127 |
+
+- **The case hint works when the model follows it literally.** All 3 targeted Cap 3 wins are cars
+  items: the first lookup with `"Chevrolet Malibu"` or `"Ford Torino"` returned nothing, the agent
+  retried in lowercase (the stored form), got the country and finished the chain. In the
+  V7 run the same items stopped there. So the 2 "hop-2 breaks" fixed were really case failures
+  at hop 1.
+- **In Cap 2 it fixed none of the 4 wrong-case items.** Twice the agent took the 0 at face value
+  ("steamship", "OCC"); twice it retried with other spellings in the same case ("Republican house",
+  "Pacific Mail Steamship Co.", 8 calls) but never ALL CAPS.
+- **The multi-hop sentence shows no separate effect:** the other 5 hop-2 breaks still fail.
+- **The other changes look like churn:** in Cap 2, 4 of the 5 wins already had every gold tool
+  result in V7 and flipped only on the groundedness judge (2 with the same calls, 2 with one call
+  more or different); one win picked the gold tool. Of the 3 losses, 2 kept every gold result and
+  failed groundedness, and one passed 6 for "more than 5". In Cap 3, the other 2 wins were "not grounded"
+  failures in V7 and changed one argument; of the 5 losses, 2 are "right answer, not grounded" and
+  3 picked a different tool for one hop (two football items, one world item), none with a case
+  problem. Those 3 may be churn or the multi-hop sentence; one run cannot tell.
+- **Both differences are well within noise** (Cap 2 ±0.09, about ±11 items). The evidence is the 3
+  targeted wins; there is no clear sign of harm on the other items, and Cap 4 is not affected.
+- **Macro over Caps 1–4 with V5, short history, V6, V7 and V8: 0.555.** Recommended for the final
+  run, as a small, low-risk change.
+
 ## Shortlist size
 
 128 tools was chosen over 50 for the fixed run: higher on both Cap 2 (0.450 vs 0.425) and Cap 3
@@ -261,6 +307,8 @@ Next targets, by size:
 - ~~**Cap 4 refusals**~~: V6 refuses all 11 unanswerable dialogues on purpose (#10, Finding 5).
 - **Remaining tool-call rejections** (2–6%): V3 (#8), patch ready as `--repair-tool-calls`; scored in the final run.
 - ~~**Answers with no tool call** (Caps 2–3)~~: V7 makes the agent try the tools (Finding 6).
+- **Argument values in the wrong case** (5 Cap 2–3 items): V8 fixes the Cap 3 ones (Finding 7); the
+  Cap 2 ones need a retry that does not rely on the model, e.g. in the tool layer.
 
 ## Notes
 

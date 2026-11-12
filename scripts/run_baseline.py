@@ -13,6 +13,7 @@ from the run's tool results only (ANSWER_PATCH, answer_rewrite.py). --short-hist
 earlier answers in Cap 4 dialogue histories (HISTORY_PATCH, short_history.py). --policy-guard is V6:
 Cap 4's tool policies are followed, not only stated (POLICY_PATCH, policy_guard.py). --tools-first
 is V7: on Caps 2-3 the agent is told to try the tools and never ask the user back (TOOLS_FIRST_PATCH).
+--tool-hints is V8: the same rule plus hints on case-sensitive values and multi-hop questions.
 
 Usage:
     python scripts/run_baseline.py --split smoke --caps 1 2 3
@@ -164,6 +165,16 @@ TOOLS_FIRST_RULE = (
     "reading. Always call at least one tool before you answer, even when no tool name matches the "
     "question exactly: a related tool, or several tools in turn, often return the data you need. "
     "Only if the tool results do not contain the answer, say that it is not available."
+)
+# V8 (--tool-hints, with --tools-first): two more sentences for the next failures in the V7 run
+# (error_analysis.md): 5 Cap 2-3 items called the right tool with the right value in another case
+# (the data is case-sensitive, so the lookup returned 0 or nothing), and in 7 of 12 Cap 3
+# wrong-tool failures the chain stopped after the first hop.
+TOOL_HINTS = (
+    " Argument values are case-sensitive: if a lookup returns nothing, an empty list or 0, call it "
+    "again with the value in other capitalizations (for example ALL CAPS or all lowercase) before "
+    "you answer. If the question has several parts, or one result is needed to find another, keep "
+    "calling tools until every part is answered, passing earlier results as arguments to later calls."
 )
 TOOLS_FIRST_PATCH = """
 import agents.agent_interface
@@ -331,10 +342,14 @@ def main() -> int:
                     help="V6: follow Cap 4's tool policies (refuse when only retrievers are allowed)")
     ap.add_argument("--tools-first", action="store_true",
                     help="V7, Caps 2-3: a system rule to try the tools before answering and never ask the user back")
+    ap.add_argument("--tool-hints", action="store_true",
+                    help="V8, with --tools-first: add hints on case-sensitive values and multi-hop questions")
     ap.add_argument("--llm-max-retries", type=int, default=None,
                     help="retries per agent LLM call, e.g. for HTTP 429 on Groq's free tier (upstream: 2)")
     ap.add_argument("--run-id", default=None, help="reuse to resume a run")
     args = ap.parse_args()
+    if args.tool_hints and not args.tools_first:
+        ap.error("--tool-hints extends --tools-first; give both")
 
     # The backend is part of the run id: results from different agent models are
     # separate experiment series and must never be pooled (SPEC §7.3).
@@ -347,6 +362,7 @@ def main() -> int:
     variant += "sh" if args.short_history else ""
     variant += "v6" if args.policy_guard else ""
     variant += "v7" if args.tools_first else ""
+    variant += "v8" if args.tool_hints else ""
     run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M}-{variant}-{args.agent_backend}-{args.split}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -364,6 +380,7 @@ def main() -> int:
                    + (" + short history" if args.short_history else "")
                    + (" + V6 policy guard" if args.policy_guard else "")
                    + (" + V7 tools-first rule (Caps 2-3)" if args.tools_first else "")
+                   + (" + V8 case and multi-hop hints" if args.tool_hints else "")
                    + ("" if args.top_k_tools == 128 else f" (top-k-tools={args.top_k_tools})"),
         "split": args.split,
         "caps": args.caps,
@@ -381,6 +398,7 @@ def main() -> int:
         "short_history": args.short_history,
         "policy_guard": args.policy_guard,
         "tools_first": args.tools_first,
+        "tool_hints": args.tool_hints,
         "max_iterations": args.max_iterations,
         "llm_max_retries": args.llm_max_retries or 2,
         "temperature": 0.0,
@@ -410,7 +428,7 @@ def main() -> int:
         if args.refresh_tools:
             patches.append(REFRESH_PATCH)
         if args.tools_first and cap_id in (2, 3):
-            patches.append(TOOLS_FIRST_PATCH.format(rule=TOOLS_FIRST_RULE))
+            patches.append(TOOLS_FIRST_PATCH.format(rule=TOOLS_FIRST_RULE + (TOOL_HINTS if args.tool_hints else "")))
         if args.short_history:
             patches.append(HISTORY_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         if args.policy_guard:
