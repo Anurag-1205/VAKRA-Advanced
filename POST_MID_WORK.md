@@ -37,6 +37,7 @@ Ground rules:
 | 10 | Wed Nov 11 | ✅ **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool. Patch ready as `--policy-guard` (`scripts/policy_guard.py`): in all 898 training dialogues the gold refuses exactly when only document retrievers are allowed and the policy applies. Offline on `dev-eval`: refuses exactly the 11 gold refusals (6 fail today), no other dialogue. Live: same 11, Task 4 0.433 → 0.500 ([results](results/v2_and_fixes_dev_eval.md), Finding 5) | Aayush (from Piyush, Nov 11) | 7 | Task 4 run scored |
 | 11 | Wed Nov 11 | ✅ **Diagnostics script** over the trajectories in IBM's output files and run logs: `scripts/diagnostics.py --run-id <run> [--show N] [--jsonl F]` (11 flags per item, failed vs correct table, example traces). First finding: answering without any tool call (often asking the user back) is in 18 of 50 Task 2 and 10 of 18 Task 3 failures of the V5 run, and in no correct item | Aayush (from Piyush, Nov 11) | – | Runs on any run folder |
 | 12 | Tue–Wed | ✅ **V5: write the answer only from tool evidence** (13% of items fail only the groundedness check). Offline test: +10 of 25 on Tasks 2–4 ([results](results/groundedness_dev_eval.md)); patch ready as `--evidence-answer`. Live on all 4 tasks: macro 0.453 → 0.492 (Task 1 0.450 → 0.583, Task 2 0.558 → 0.583, Tasks 3–4 unchanged); each rewrite is logged to `v5_drafts.jsonl` since Nov 10 | Aayush | – | Run scored |
+| 12b | Thu Nov 12 | ✅ **V7: tools-first rule** (Tasks 2–3, not planned): a system message to try the tools before answering and never ask the user back, for the biggest failure pattern #11 found (28 items answered with no tool call, none correct). Patch `--tools-first`. Live: Task 2 0.583 → 0.633, Task 3 unchanged; no-tool-call items 28 → 3, ask-backs 13 → 0 ([results](results/v2_and_fixes_dev_eval.md), Finding 6) | Aayush | 11 | Tasks 2–3 scored |
 | 13 | Thu Nov 12 | **Error analysis**: about 20 failed items per task, with example traces | Piyush | 11 | Section drafted |
 | 14 | Thu–Fri | **Report sections drafted:** method and system *(Anurag)*, tool retrieval and Tasks 2–3 *(Aayush)*, Task 4 and error analysis *(Piyush)* | All | – | Draft in `report/` |
 | 15 | Fri Nov 13 | **Final runs**: the best configuration on all tasks | Aayush (runs), all | 1–12 | All final runs scored |
@@ -49,7 +50,7 @@ Ground rules:
 [results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md); #6 in
 [results/tool_recall.md](results/tool_recall.md) (retrieval is solved at k = 128); #9 (V4) checked offline there too: no gain even with gold
 evidence, so no live patch or paid run;
-V5 (#12) offline test and full run in [results/groundedness_dev_eval.md](results/groundedness_dev_eval.md) (macro 0.453 → 0.492). #7 (short Task 4 history, Aayush) recovers 6 of the 10 dialogues that did not fit: Task 4 0.317 → 0.433, macro 0.521. #10 (V6 policy guard, Aayush) refuses exactly the 11 gold refusals: Task 4 0.433 → 0.500, macro 0.538. #11 diagnostics script done (Aayush). #8 (V3 tool-call repair, Aayush) patch ready as `--repair-tool-calls`, checked offline; scored in #15. Also done, not planned: a
+V5 (#12) offline test and full run in [results/groundedness_dev_eval.md](results/groundedness_dev_eval.md) (macro 0.453 → 0.492). #7 (short Task 4 history, Aayush) recovers 6 of the 10 dialogues that did not fit: Task 4 0.317 → 0.433, macro 0.521. #10 (V6 policy guard, Aayush) refuses exactly the 11 gold refusals: Task 4 0.433 → 0.500, macro 0.538. #11 diagnostics script done (Aayush). #8 (V3 tool-call repair, Aayush) patch ready as `--repair-tool-calls`, checked offline; scored in #15. #12b (V7 tools-first rule, Aayush): Task 2 0.583 → 0.633, macro 0.551. Also done, not planned: a
 fix for upstream's stale Cap 1 tool list (`--refresh-tools`, Aayush), without which Task 1 could not
 be scored.
 
@@ -80,6 +81,7 @@ patch (`--repair-tool-calls`, with `--policy-guard` added since), and the diagno
 8. V6: policy guard and deliberate refusals (#10), taken over from Piyush on Nov 11. Wed
 9. Diagnostics script over IBM's output files and run logs (#11), taken over from Piyush on Nov 11. Wed
 10. V3: tool-call repair (#8), taken over from Anurag on Nov 12. Thu
+    V7: tools-first rule for Tasks 2–3 (#12b), added Nov 12. Thu
 11. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
 12. Final runs for all variants (#15). Fri Nov 13
 13. Final report and reproducibility check (#17–18). Sat Nov 14

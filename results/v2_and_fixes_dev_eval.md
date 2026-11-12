@@ -22,6 +22,7 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 | + V5 evidence-only answer (`--evidence-answer`, Nov 10; see [groundedness_dev_eval.md](groundedness_dev_eval.md)) | 0.583 (35) | 0.583 (70) | 0.486 (17) | 0.317 (19)\* |
 | + short history (`--short-history`, Cap 4 only, Nov 10; see Finding 4) | – | – | – | **0.433 (26)\*** |
 | + V6 policy guard (`--policy-guard`, Cap 4 only, Nov 11; see Finding 5) | – | – | – | **0.500 (30)** |
+| + V7 tools-first rule (`--tools-first`, Caps 2–3 only, Nov 12; see Finding 6) | – | **0.633 (76)** | 0.486 (17) | – |
 | 95% half-width | ±0.13 | ±0.09 | ±0.17 | ±0.12 |
 
 \* Cap 4 includes dialogues credited after an agent crash (unanswerable gold, no tool call): 3 for
@@ -42,6 +43,7 @@ Run ids:
 - V2 + both fixes, Cap 1 (max 25 iterations): `20261109-2356-v2hybridfixrt-maxit25-groq-dev-eval-cap1`
 - + V5 + short history, Cap 4: `20261110-2302-v2hybridfixrtv5sh-groq-dev-eval-cap4`
 - + V5 + short history + V6, Cap 4: `20261111-1610-v2hybridfixrtv5shv6-groq-dev-eval-cap4`
+- + V5 + V7, Caps 2–3: `20261112-1144-v2hybridfixrtv5v7-groq-dev-eval-cap23`
 - V0 rows: see [baseline_dev_eval.md](baseline_dev_eval.md).
 
 Cap 1 runs use `--max-iterations 25` as a cost guard (upstream sets no limit). It never decided an
@@ -192,6 +194,45 @@ short-history run:
   `evaluator/scorer.py` loads it if present) scores a turn 0 when the policy is broken, and the
   guard prevents both kinds of violation.
 
+## Finding 6: V7, a tools-first rule for Caps 2–3 (2026-11-12)
+
+In the V5 run, 18 of 120 Cap 2 items and 10 of 35 Cap 3 items were answered without any tool
+call, none correctly (`diagnostics.py`, flag "no tool call"). The model decided that no tool fits
+("I'm not seeing a built-in query that directly reports…") and often asked the user to clarify
+(13 of the 28), though the benchmark has no user. Upstream gives the agent no system message on
+Caps 2–3.
+
+`--tools-first` (V7, Caps 2–3 only) adds one system message to every agent LLM call
+(`TOOLS_FIRST_RULE` in `run_baseline.py`): try the tools before answering, related tools too;
+never ask the user back, take the most reasonable reading; say the answer is not available only
+when the tool results do not contain it. It is passed as LangGraph's `prompt`, so it is not added
+to the history and the recorded trajectory is unchanged.
+
+Live run (Caps 2–3, the V5 setup plus `--tools-first`), item by item against the V5 run:
+
+| | Cap 2 | Cap 3 |
+|---|---:|---:|
+| Score | 0.583 (70) → **0.633 (76)** | 0.486 (17) → 0.486 (17) |
+| Items won / lost | +9 / −3 | +3 / −3 |
+| V5's no-tool-call items now correct | 4 of 18 | 3 of 10 |
+| Items with no tool call | 18 → 2 | 10 → 1 |
+| Answers that ask the user back | 8 → 0 | 5 → 0 |
+
+- **The rule does what it says:** the model now calls tools on almost every item and never asks
+  the user back. 7 of the 15 wins are items that had no tool call before.
+- **Most no-tool-call items still fail** (14 of 18 in Cap 2, 7 of 10 in Cap 3): the model calls
+  tools now but not the gold ones (flag "gold tool never called"). The rule removes a refusal; it
+  does not find the right tool.
+- **The losses look mostly like the usual churn:** all 3 Cap 2 losses made exactly the same tool
+  calls as in the V5 run and lost only on the judges (two authors lists now "not grounded", one
+  student_loan count now judged wrong). A Cap 3 football item added one call and is now "right
+  answer, not grounded". Two Cap 3 hockey items, judged right before, called other tools and now
+  say the data is not available; the rule's "say it is not available" clause may play a part.
+- **Cap 2's +6 is within its ±0.09 half-width** (about ±11 items), so the gain on its own is not
+  significant; the evidence is the targeted pattern above. Cap 3 is flat.
+- **Macro over Caps 1–4 with V5, short history, V6 and V7: 0.551** (Cap 1 from the V5 run, Cap 4
+  from the V6 run). Recommended for the final run.
+
 ## Shortlist size
 
 128 tools was chosen over 50 for the fixed run: higher on both Cap 2 (0.450 vs 0.425) and Cap 3
@@ -218,7 +259,8 @@ Next targets, by size:
   the right answer but fail the groundedness judge.
 - ~~**Cap 4 context length** (17%)~~: fixed by `--short-history` (#7, Finding 4).
 - ~~**Cap 4 refusals**~~: V6 refuses all 11 unanswerable dialogues on purpose (#10, Finding 5).
-- **Remaining tool-call rejections** (2–6%): V3 (#8).
+- **Remaining tool-call rejections** (2–6%): V3 (#8), patch ready as `--repair-tool-calls`; scored in the final run.
+- ~~**Answers with no tool call** (Caps 2–3)~~: V7 makes the agent try the tools (Finding 6).
 
 ## Notes
 
