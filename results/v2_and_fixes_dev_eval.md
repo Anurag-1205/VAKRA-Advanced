@@ -322,3 +322,5 @@ Next targets, by size:
 - **Cost since (Nov 12, Groq dashboard): project total $7.71.** The $2.46 after the note above
   covers the V5 offline test, the full V5 run (Caps 1–4), the short-history and V6 Cap 4 runs and
   the V6 topic check (`policy_guard.py --check`); the dashboard does not split it by run.
+- **Cost, later on Nov 12 (Groq dashboard): project total $9.36.** The $1.65 since the note above
+  covers the V7 and V8 check runs on Caps 2–3 (about $0.80 each, judge included).
