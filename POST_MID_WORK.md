@@ -32,7 +32,7 @@ Ground rules:
 | 5 | Tue Nov 10 | ✅ **Rerun V2 on top of the schema fix**; choose the shortlist size | Aayush | 1, 2 | Size chosen, run scored |
 | 6 | Tue Nov 10 | ✅ **Retriever ablations**: retriever type × shortlist size (offline, no cost) | Aayush | – | Table in `results/tool_recall.md` |
 | 7 | Tue Nov 10 | ✅ **Shorten long answers in the Task 4 dialogue history** (17% of dialogues don't fit the context today). Cause: 10 dialogues (authors, menu) carry earlier answers of 0.3–9.4M characters. Patch ready as `--short-history` (first rows + total, ≤ 2,000 characters per answer); checked offline: largest history 2.3M → 1.6k tokens. Live: 0 context errors, Task 4 0.317 → 0.433 ([results](results/v2_and_fixes_dev_eval.md), Finding 4) | Aayush (from Piyush, Nov 10) | – | No "context too long" errors on `dev-eval` Task 4 |
-| 8 | Wed Nov 11 | **V3: tool-call repair**, as one more run-time patch: when Groq rejects a tool call (HTTP 400, tool-call validation), show the model the error and let it retry once. Small on purpose: after the schema fix only 1.7% (Task 2) and 5.7% (Task 3) of items are still lost to rejected calls. | Anurag | 1 | Checked offline (no rejected call ends an item); scored in the final run (#15) |
+| 8 | Wed Nov 11 | ✅ **V3: tool-call repair**, as one more run-time patch: when Groq rejects a tool call (HTTP 400, tool-call validation), show the model the error and let it retry once. Small on purpose: after the schema fix only 1.7% (Task 2) and 5.7% (Task 3) of items are still lost to rejected calls. Patch ready as `--repair-tool-calls` (`scripts/tool_call_repair.py`), at the LLM call so it composes with V5 and V6; checked offline with `--self-test` (fake LLM on a LangGraph agent: retried once, note kept out of the history, other 400s untouched). Today 6 items of the V5 runs end this way (2 Task 1, 1 Task 2, 2 Task 3, 1 Task 4); `tool_call_repair.py --run-id <run>` lists them for any run | Aayush (from Anurag, Nov 12) | 1 | Checked offline (no rejected call ends an item); scored in the final run (#15) |
 | 9 | Wed Nov 11 | ✅ *(negative result)* **V4: retrieve tools again at each hop** for Task 3, using the previous tool result. Checked offline instead ([results](results/tool_recall.md)): even with the gold previous result, per-hop retrieval changes at most 1 of 35 items, so no live patch and no paid run. | Aayush | – | Offline check in `results/tool_recall.md` |
 | 10 | Wed Nov 11 | ✅ **V6: policy guard**: refuse on purpose when the dialogue's policy forbids the needed tool. Patch ready as `--policy-guard` (`scripts/policy_guard.py`): in all 898 training dialogues the gold refuses exactly when only document retrievers are allowed and the policy applies. Offline on `dev-eval`: refuses exactly the 11 gold refusals (6 fail today), no other dialogue. Live: same 11, Task 4 0.433 → 0.500 ([results](results/v2_and_fixes_dev_eval.md), Finding 5) | Aayush (from Piyush, Nov 11) | 7 | Task 4 run scored |
 | 11 | Wed Nov 11 | ✅ **Diagnostics script** over the trajectories in IBM's output files and run logs: `scripts/diagnostics.py --run-id <run> [--show N] [--jsonl F]` (11 flags per item, failed vs correct table, example traces). First finding: answering without any tool call (often asking the user back) is in 18 of 50 Task 2 and 10 of 18 Task 3 failures of the V5 run, and in no correct item | Aayush (from Piyush, Nov 11) | – | Runs on any run folder |
@@ -45,18 +45,18 @@ Ground rules:
 | 18 | Sat Nov 14 | **Reproducibility check**: every number in the report links to its run id; README steps work | Aayush + Anurag | 17 | Checked |
 | 19 | **Sun Nov 15** | **Submit** | Anurag | 17, 18 | Submitted |
 
-**Status 2026-11-10:** ✅ = done. Results for #1, #2, #3 and #5 are in
+**Status 2026-11-12:** ✅ = done. Results for #1, #2, #3 and #5 are in
 [results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md); #6 in
 [results/tool_recall.md](results/tool_recall.md) (retrieval is solved at k = 128); #9 (V4) checked offline there too: no gain even with gold
 evidence, so no live patch or paid run;
-V5 (#12) offline test and full run in [results/groundedness_dev_eval.md](results/groundedness_dev_eval.md) (macro 0.453 → 0.492). #7 (short Task 4 history, Aayush) recovers 6 of the 10 dialogues that did not fit: Task 4 0.317 → 0.433, macro 0.521. #10 (V6 policy guard, Aayush) refuses exactly the 11 gold refusals: Task 4 0.433 → 0.500, macro 0.538. #11 diagnostics script done (Aayush). Also done, not planned: a
+V5 (#12) offline test and full run in [results/groundedness_dev_eval.md](results/groundedness_dev_eval.md) (macro 0.453 → 0.492). #7 (short Task 4 history, Aayush) recovers 6 of the 10 dialogues that did not fit: Task 4 0.317 → 0.433, macro 0.521. #10 (V6 policy guard, Aayush) refuses exactly the 11 gold refusals: Task 4 0.433 → 0.500, macro 0.538. #11 diagnostics script done (Aayush). #8 (V3 tool-call repair, Aayush) patch ready as `--repair-tool-calls`, checked offline; scored in #15. Also done, not planned: a
 fix for upstream's stale Cap 1 tool list (`--refresh-tools`, Aayush), without which Task 1 could not
 be scored.
 
 **Decided 2026-11-10 (whole team):** #4 (V1) is dropped. Every variant is a run-time patch in
 `scripts/run_baseline.py` (retry, `--retriever`, `--fix-tool-schema`, `--refresh-tools`,
 `--short-history`, `--evidence-answer`), so IBM's code stays unchanged. V3 (#8) becomes one more
-patch, and the diagnostics (#11) read IBM's output files and run logs.
+patch (`--repair-tool-calls`, with `--policy-guard` added since), and the diagnostics (#11) read IBM's output files and run logs.
 
 ## The same tasks, by person
 
@@ -64,7 +64,7 @@ patch, and the diagnostics (#11) read IBM's output files and run logs.
 
 1. ✅ Fix the tool-schema bug (#1), `--fix-tool-schema`. Mon Nov 9
 2. ❌ V1: own runner and agent (#4), dropped Nov 10
-3. V3: tool-call repair as a run-time patch (#8). **Wed Nov 11**
+3. ~~V3: tool-call repair (#8)~~, taken over by Aayush on Nov 12
 4. Report: method and system sections (#14). Thu–Fri
 5. Final report, reproducibility check, submission (#17–19). Sat–Sun
 
@@ -79,9 +79,10 @@ patch, and the diagnostics (#11) read IBM's output files and run logs.
 7. Shorten long answers in the Task 4 history (#7), taken over from Piyush on Nov 10. Tue
 8. V6: policy guard and deliberate refusals (#10), taken over from Piyush on Nov 11. Wed
 9. Diagnostics script over IBM's output files and run logs (#11), taken over from Piyush on Nov 11. Wed
-10. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
-11. Final runs for all variants (#15). Fri Nov 13
-12. Final report and reproducibility check (#17–18). Sat Nov 14
+10. V3: tool-call repair (#8), taken over from Anurag on Nov 12. Thu
+11. Report: tool retrieval and Tasks 2–3 sections (#14). Thu–Fri
+12. Final runs for all variants (#15). Fri Nov 13
+13. Final report and reproducibility check (#17–18). Sat Nov 14
 
 ### Piyush: Task 4 and analysis
 

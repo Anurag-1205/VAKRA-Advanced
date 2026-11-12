@@ -6,8 +6,9 @@ Predictions land in runs/<run_id>/output/<cap_dir>/<domain>.json (official forma
 
 V2 (--retriever bm25|hybrid) is the same agent with our tool shortlist (scripts/retrieval.py)
 patched in at run time; upstream's code is not modified. --fix-tool-schema adds the
-zero-parameter tool-schema fix (SCHEMA_PATCH) to either. --refresh-tools fixes upstream's Cap 1
-tool list going stale (see REFRESH_PATCH). --evidence-answer is V5: the final answer is rewritten
+zero-parameter tool-schema fix (SCHEMA_PATCH) to either. --repair-tool-calls is V3: a tool call
+Groq rejects is retried once with the error shown (REPAIR_PATCH, tool_call_repair.py).
+--refresh-tools fixes upstream's Cap 1 tool list going stale (see REFRESH_PATCH). --evidence-answer is V5: the final answer is rewritten
 from the run's tool results only (ANSWER_PATCH, answer_rewrite.py). --short-history shortens long
 earlier answers in Cap 4 dialogue histories (HISTORY_PATCH, short_history.py). --policy-guard is V6:
 Cap 4's tool policies are followed, not only stated (POLICY_PATCH, policy_guard.py).
@@ -108,6 +109,47 @@ def _to_pydantic_or_empty(self, tool_name, input_schema):
     model = _to_pydantic(self, tool_name, input_schema)
     return model if model is not None else create_model(f"{tool_name}Input")
 MCPToolWrapper._convert_json_schema_to_pydantic = _to_pydantic_or_empty
+"""
+
+# V3 (--repair-tool-calls): Groq rejects a tool call that does not match the request's tools with
+# HTTP 400, and upstream ends the item as an error. Here that LLM call is sent once more, with a
+# user message quoting the error and the rejected call (tool_call_repair.py). Only the retry's input
+# has the note; the agent's history and the recorded trajectory are unchanged. Patched at the LLM
+# call, so it composes with the run() wrappers of V5 and V6. Each retry is appended to
+# <output>/v3_repairs.jsonl.
+REPAIR_PATCH = """
+sys.path.append({scripts_dir!r})
+import json, os, openai
+from langchain_core.messages import HumanMessage
+from langchain_openai.chat_models.base import BaseChatOpenAI
+from tool_call_repair import is_rejected_call, repair_note
+_repairs = os.path.join(sys.argv[sys.argv.index("--output") + 1], "v3_repairs.jsonl") if "--output" in sys.argv else None
+_agenerate = BaseChatOpenAI._agenerate
+async def _agenerate_with_repair(self, messages, *args, **kwargs):
+    try:
+        return await _agenerate(self, messages, *args, **kwargs)
+    except openai.BadRequestError as e:
+        body = e.body if isinstance(e.body, dict) else {{}}
+        message = body.get("message") or e.message
+        if not is_rejected_call(body.get("code"), message):
+            raise
+        entry = {{"query": next((str(m.content)[:200] for m in reversed(messages) if m.type == "human"), ""),
+                  "error": message[:500], "failed_generation": str(body.get("failed_generation") or "")[:500],
+                  "retry_calls": None, "retry_error": None}}
+        try:
+            result = await _agenerate(self, [*messages, HumanMessage(content=repair_note(message, body.get("failed_generation")))],
+                                      *args, **kwargs)
+            entry["retry_calls"] = [c["name"] for g in result.generations for c in getattr(g.message, "tool_calls", [])]
+            return result
+        except Exception as e2:
+            entry["retry_error"] = str(e2)[:500]
+            raise
+        finally:
+            if _repairs:
+                os.makedirs(os.path.dirname(_repairs), exist_ok=True)
+                with open(_repairs, "a") as fh:
+                    fh.write(json.dumps(entry, ensure_ascii=False) + "\\n")
+BaseChatOpenAI._agenerate = _agenerate_with_repair
 """
 
 # --short-history (#7): upstream puts every earlier Cap 4 turn's gold answer into the history
@@ -257,6 +299,8 @@ def main() -> int:
                     help="tool shortlist ranking: minilm is upstream's (V0); bm25 or hybrid is V2")
     ap.add_argument("--fix-tool-schema", action="store_true",
                     help="give zero-parameter tools an empty schema instead of LangChain's inferred one")
+    ap.add_argument("--repair-tool-calls", action="store_true",
+                    help="V3: when Groq rejects a tool call (HTTP 400), retry it once with the error shown")
     ap.add_argument("--max-iterations", type=int, default=None)
     ap.add_argument("--refresh-tools", action="store_true",
                     help="re-list tools after Cap 1's per-item universe switch (fixes an upstream runner bug)")
@@ -275,6 +319,7 @@ def main() -> int:
     # separate experiment series and must never be pooled (SPEC §7.3).
     variant = "v0" if args.retriever == "minilm" else f"v2{args.retriever}"
     variant += "fix" if args.fix_tool_schema else ""
+    variant += "v3" if args.repair_tool_calls else ""
     variant += "" if args.top_k_tools == 128 else f"k{args.top_k_tools}"
     variant += "rt" if args.refresh_tools else ""
     variant += "v5" if args.evidence_answer else ""
@@ -291,6 +336,7 @@ def main() -> int:
         "variant": ("V0 upstream LangGraphReActAgent" if args.retriever == "minilm"
                     else f"V2 upstream LangGraphReActAgent + {args.retriever} tool shortlist")
                    + (" + tool-schema fix" if args.fix_tool_schema else "")
+                   + (" + V3 tool-call repair" if args.repair_tool_calls else "")
                    + (" + tool refresh" if args.refresh_tools else "")
                    + (" + V5 evidence-only answer" if args.evidence_answer else "")
                    + (" + short history" if args.short_history else "")
@@ -306,6 +352,7 @@ def main() -> int:
         "top_k_tools": args.top_k_tools,
         "retriever": args.retriever,
         "fix_tool_schema": args.fix_tool_schema,
+        "repair_tool_calls": args.repair_tool_calls,
         "refresh_tools": args.refresh_tools,
         "evidence_answer": args.evidence_answer,
         "short_history": args.short_history,
@@ -334,6 +381,8 @@ def main() -> int:
             patches.append(RETRIEVER_PATCH.format(scripts_dir=str(SCRIPTS_DIR), retriever=args.retriever))
         if args.fix_tool_schema:
             patches.append(SCHEMA_PATCH)
+        if args.repair_tool_calls:
+            patches.append(REPAIR_PATCH.format(scripts_dir=str(SCRIPTS_DIR)))
         if args.refresh_tools:
             patches.append(REFRESH_PATCH)
         if args.short_history:
