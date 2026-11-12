@@ -229,3 +229,6 @@ Next targets, by size:
 - **Cost:** **$3.25** for all of these runs (Groq dashboard), including the two stopped Cap 1
   runs and the 7-item Cap 1 check. The project total is now **$5.25** ($2.00 for the baselines in
   [baseline_dev_eval.md](baseline_dev_eval.md)).
+- **Cost since (Nov 12, Groq dashboard): project total $7.71.** The $2.46 after the note above
+  covers the V5 offline test, the full V5 run (Caps 1–4), the short-history and V6 Cap 4 runs and
+  the V6 topic check (`policy_guard.py --check`); the dashboard does not split it by run.

@@ -149,4 +149,5 @@ Same setup as the last row of [v2_and_fixes_dev_eval.md](v2_and_fixes_dev_eval.m
 - **Macro +0.039 (0.453 → 0.492)**, in line with the offline estimate of about +4 points. Each
   capability's change is within its 95% half-width; the evidence is the item-level pattern above.
 - **Next time, record the draft** before the rewrite (in the output file or the run log) so that
-  V5-caused changes can be told apart from agent noise.
+  V5-caused changes can be told apart from agent noise. *Done (d7b9f13): every rewrite is now
+  appended to `<output>/v5_drafts.jsonl` (query, draft, final answer).*
