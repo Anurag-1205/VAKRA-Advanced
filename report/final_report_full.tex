@@ -1,0 +1,471 @@
+\documentclass[10pt]{article}
+
+\usepackage[margin=0.75in,top=0.7in,bottom=0.7in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+
+\setlist{nosep, leftmargin=1.2em}
+\setlength{\parskip}{0.35em}
+\setlength{\parindent}{0pt}
+\setlength{\tabcolsep}{4pt}
+\frenchspacing
+\emergencystretch=3em
+\titleformat{\section}{\normalsize\bfseries}{\thesection.}{0.4em}{}
+\titlespacing*{\section}{0pt}{0.9em}{0.2em}
+\titleformat{\subsection}{\small\bfseries}{\thesubsection}{0.4em}{}
+\titlespacing*{\subsection}{0pt}{0.6em}{0.1em}
+
+% Longer draft with more detail. The submitted report is final_report.tex (2 pages).
+\newcommand{\todo}[1]{\textcolor{red}{[#1]}}
+
+\begin{document}
+
+\begin{center}
+{\fontsize{13}{16}\selectfont\bfseries VAKRA-Advanced: Tool-Using LLM Agents for Multi-Hop, Multi-Source Reasoning}\\[0.4em]
+{\normalsize Final Report}\\[0.4em]
+{\small Anurag Kaushal (2025202013) \quad Aayush Pandey (2025201058) \quad Piyush Agarwal (2025201082)}
+\end{center}
+
+\section{Introduction}
+VAKRA-Advanced (SemEval-2027 Task 11) asks an agent to answer questions by calling tools in a
+live environment: 8,000+ APIs over real databases in 62 domains, plus document collections.
+There are four tasks: (1) chaining generic data operations, (2) selecting the right endpoint,
+(3) multi-hop API reasoning, and (4) multi-turn dialogues that mix APIs and documents under
+tool-use policies. The official baseline is a LangGraph ReAct agent that shortlists up to 288
+tools per domain and lets the LLM call them in a loop.
+
+Our Phase~1 report measured that baseline and diagnosed its failures. This report describes what
+we changed and what each change gained. In short:
+\begin{itemize}
+\item \textbf{Three bugs in the official runner} cost more than any modelling choice. A tool-schema
+  bug rejected correct calls on 22.5\% of Task~2 items, a stale tool list made Task~1 unsolvable
+  for most items, and long dialogue histories overflowed the context on 17\% of Task~4 dialogues.
+  We fixed all three.
+\item \textbf{Tool retrieval is solved at the official shortlist size.} A hybrid BM25 + dense
+  shortlist keeps every gold tool of every solvable item at $k{=}128$, so retrieval is not where
+  items are lost. Its advantage is at small $k$.
+\item \textbf{Four agent-level changes} target the failures that remain: rewriting the final answer
+  from the tool evidence only (V5), following Task~4's tool policies by construction (V6), a
+  system rule to try the tools before answering (V7), and hints for case-sensitive values (V8).
+\item On our evaluation set, the final system scores 0.500, 0.625, 0.543 and 0.583 on Tasks~1--4
+  (macro 0.563), against 0.408, 0.343 and 0.350 for the baseline on Tasks~2--4; the
+  baseline cannot complete Task~1 items at all. The largest remaining failure is choosing the wrong tool from a correct shortlist:
+  47--69\% of the failed items in Tasks~2--4, although a third of these have a questionable gold.
+\end{itemize}
+
+\section{Experimental setup}
+\textbf{Data.} We hold out 9 training domains from \emph{every} task (\texttt{authors},
+\texttt{cars}, \texttt{european\_football\_1}, \texttt{hockey}, \texttt{ice\_hockey\_draft},
+\texttt{menu}, \texttt{sales\_in\_weather}, \texttt{student\_loan}, \texttt{world}), since Tasks~2--4 share each domain's
+tools and a per-task hold-out would leak them. All scores are on \texttt{dev-eval}, a fixed,
+domain-stratified sample of these held-out domains: 60, 120, 35 and 60 items for Tasks~1--4.
+Access to the official test set was requested and is still pending, so every number here is on
+held-out \emph{training} domains.
+
+\textbf{Model and scoring.} The agent and both judges use \texttt{gpt-oss-120b} on Groq at
+temperature~0. The official evaluator replays the agent's tool calls and scores the final turn
+0/1: the agent must reproduce the gold tool responses or convince a correctness judge, and a
+second judge must find the answer grounded in the tool outputs. When the gold answer is a
+refusal, a refusal with no tool call scores. Task~4 is scored on the final turn of each
+dialogue; earlier turns are given as history with their gold answers.
+
+\textbf{Noise.} With these sample sizes the 95\% half-widths are $\pm$0.13, $\pm$0.09,
+$\pm$0.17 and $\pm$0.12 for Tasks~1--4. Temperature~0 does not make runs repeatable: between two
+runs with identical input, about 10\% of items flip. A difference of a few items is therefore
+not evidence, and we judge each change item by item on the items it targets, not on totals.
+
+\textbf{Cost.} All runs together, judge included, cost \$10.82 on Groq's paid
+tier; the final run on all four tasks cost \$1.46 of it.
+
+\section{System}
+We keep the official agent, runner and evaluator unchanged. Every change is a run-time patch,
+applied by our script \texttt{run\_baseline.py} before the official runner starts. Each patch is
+behind its own flag, and the run id records which flags were on. This keeps the official baseline
+reproducible and makes every ablation a one-flag difference. We dropped our plan to write our
+own agent (V1): the patches already carry every fix, and a separate agent would have needed a
+parity run we could not afford. The cost is that changes needing control over the agent loop
+itself are out of scope.
+
+\begin{center}\small
+\begin{tabular}{@{}lllp{0.52\textwidth}@{}}
+\toprule
+Change & Flag & Tasks & What it does \\
+\midrule
+\multicolumn{4}{@{}l}{\emph{Fixes to the official runner}} \\
+Schema fix & \texttt{-{}-fix-tool-schema} & all & Tools without parameters get an empty schema
+  instead of one with a required internal field, which Groq rejected \\
+Tool refresh & \texttt{-{}-refresh-tools} & 1 & Re-lists the tools after Task~1's per-item tool
+  set switches \\
+Short history & \texttt{-{}-short-history} & 4 & Earlier answers over 2,000 characters keep their
+  first rows plus a note with the total \\
+\midrule
+\multicolumn{4}{@{}l}{\emph{Variants}} \\
+V2 & \texttt{-{}-retriever hybrid} & 2--4 & BM25 + dense tool shortlist (reciprocal-rank fusion) \\
+V3 & \texttt{-{}-repair-tool-calls} & all & A tool call the API rejects is retried once, with
+  the error shown to the model \\
+V4 & -- & 3 & Per-hop tool retrieval; dropped after an offline upper bound showed no gain \\
+V5 & \texttt{-{}-evidence-answer} & all & The final answer is rewritten from the tool results
+  only \\
+V6 & \texttt{-{}-policy-guard} & 4 & Task~4 tool policies are enforced, not only stated \\
+V7 & \texttt{-{}-tools-first} & 2--3 & A system rule: try the tools before answering, never ask
+  the user back \\
+V8 & \texttt{-{}-tool-hints} & 2--3 & V7 plus hints on case-sensitive values and multi-hop
+  questions \\
+\bottomrule
+\end{tabular}\\[0.2em]
+{\footnotesize \textbf{Table 1.} Our changes. All are patches applied at run time; the official
+code is unchanged.}
+\end{center}
+
+\section{Results}
+\textbf{Final configuration.} Table~2 compares the official baseline with our final system: one
+run with every change of Table~1 except V4, on all four tasks (run ids in Section~10).
+
+\begin{center}\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+ & Task 1 & Task 2 & Task 3 & Task 4 & Macro \\
+ & ($n{=}60$) & ($n{=}120$) & ($n{=}35$) & ($n{=}60$) & \\
+\midrule
+V0, official baseline & --$^{\dagger}$ & 0.408 (49) & 0.343 (12) & 0.350 (21)$^{\ast}$ & -- \\
+Final system          & \textbf{0.500} (30) & \textbf{0.625} (75) & \textbf{0.543} (19) & \textbf{0.583} (35) & \textbf{0.563} \\
+\midrule
+Gain                  & -- & +0.217 & +0.200 & +0.233 & \\
+95\% half-width       & $\pm$0.13 & $\pm$0.09 & $\pm$0.17 & $\pm$0.12 & \\
+\bottomrule
+\end{tabular}\\[0.2em]
+{\footnotesize \textbf{Table 2.} Official baseline against our final system on \texttt{dev-eval}
+(items correct in brackets). $^{\dagger}$Stopped: every completed item hit the iteration limit
+(Section~6). $^{\ast}$0.300 without the 3 dialogues credited after a crash; the final run has
+none.}
+\end{center}
+
+The gains on Tasks~2 and~4 are well beyond their 95\% half-widths, and Task~3's (+7 items) is
+just beyond it; Task~1 goes from unscorable to 0.500. Against the last row of each task in
+Table~3, the final run differs by $-5$, $-3$, $+2$ and $+5$ items on Tasks~1--4, all within
+noise and mostly groundedness verdicts that flip between runs; the only change new to any task
+is V3.
+Of its 275 items, 7 end with an agent error: a tool response or context too long for the API (5),
+the iteration limit (1, Task~1) and a rejected call (1, Task~3).
+
+\textbf{Ablation.} Table~3 adds one change at a time. Each row is its own run on
+\texttt{dev-eval}; a dash means the change does not apply to that task and the score carries
+over from the row above. V3 is scored only as part of the final run.
+
+\begin{center}\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+ & Task 1 & Task 2 & Task 3 & Task 4 & Macro \\
+ & ($n{=}60$) & ($n{=}120$) & ($n{=}35$) & ($n{=}60$) & \\
+\midrule
+V0, official baseline                 & --$^{\dagger}$ & 0.408 & 0.343 & 0.350$^{\ast}$ & -- \\
+\quad + tool refresh                  & 0.483 & -- & -- & -- & -- \\
+V2 hybrid shortlist ($k{=}128$)       & -- & 0.450 & 0.371 & -- & -- \\
+\quad + schema fix + tool refresh     & 0.450 & 0.558 & 0.486 & 0.317$^{\ast}$ & 0.453 \\
+\quad + V5 evidence-only answer       & 0.583 & 0.583 & 0.486 & 0.317$^{\ast}$ & 0.492 \\
+\quad + short history                 & -- & -- & -- & 0.433$^{\ast}$ & 0.521 \\
+\quad + V6 policy guard               & -- & -- & -- & 0.500 & 0.538 \\
+\quad + V7 tools-first rule           & -- & 0.633 & 0.486 & -- & 0.551 \\
+\quad + V8 hints                      & -- & \textbf{0.650} & 0.486 & -- & \textbf{0.555} \\
+\midrule
+95\% half-width                       & $\pm$0.13 & $\pm$0.09 & $\pm$0.17 & $\pm$0.12 & \\
+\bottomrule
+\end{tabular}\\[0.2em]
+{\footnotesize \textbf{Table 3.} One change at a time on \texttt{dev-eval}.
+$^{\dagger}$Stopped after 7 items, all of which hit the iteration limit because of the stale
+tool list (Section~6). $^{\ast}$Includes dialogues credited after the agent crashed (gold is a
+refusal and no tool was called): 3 for V0, 1 for the next rows. V6 refuses on purpose instead.}
+\end{center}
+
+Most single steps in Table~3 are smaller than their task's 95\% half-width, so we do not rely
+on totals. For each change, Sections~5--7 report what happened
+to the items it targets.
+
+\section{Tool retrieval}
+The baseline gives the LLM only the top $k$ of a domain's tools ($k{=}128$ by default), ranked
+by MiniLM embeddings of the question against each tool's \texttt{name: description}. We treat
+this as ad-hoc retrieval and count an item at $k$ only if \emph{all} its gold tools are in the
+top $k$, so recall@$k$ caps the agent's score. We compared the dense retriever with BM25
+($k_1{=}1.5$, $b{=}0.75$) and their reciprocal-rank fusion (constant 60).
+
+\begin{center}\small
+\begin{tabular}{@{}llcccccc@{}}
+\toprule
+Task & Retriever & R@10 & R@20 & R@32 & R@50 & R@128 & MRR \\
+\midrule
+2 & Dense (MiniLM, baseline) & \textbf{.825} & .900 & .925 & .958 & \textbf{.992} & .563 \\
+  & BM25                     & .750 & .842 & .933 & .950 & \textbf{.992} & .477 \\
+  & Hybrid (V2)              & .817 & \textbf{.925} & \textbf{.958} & \textbf{.975} & \textbf{.992} & \textbf{.565} \\
+\midrule
+3 & Dense (MiniLM, baseline) & .343 & .514 & .714 & .800 & .943 & .624 \\
+  & BM25                     & \textbf{.371} & .543 & .714 & \textbf{.971} & \textbf{1.00} & .540 \\
+  & Hybrid (V2)              & .314 & \textbf{.571} & \textbf{.800} & .857 & \textbf{1.00} & \textbf{.685} \\
+\bottomrule
+\end{tabular}\\[0.2em]
+{\footnotesize \textbf{Table 4.} Gold-tool recall of the shortlist on \texttt{dev-eval}
+(120 / 35 items). No LLM calls.}
+\end{center}
+
+\begin{itemize}
+\item \textbf{At $k{=}128$, retrieval is solved.} The hybrid shortlist keeps every gold tool of
+  every solvable item. The one Task~2 miss is an item whose gold tool is not in the domain's
+  catalog, so no agent can solve it. None of the items lost in our runs is a retrieval failure.
+\item \textbf{The hybrid's advantage is at small $k$.} At $k{=}32$ it keeps the gold tools for
+  95.8\% of Task~2 and 80.0\% of Task~3 items, against 92.5\% and 71.4\% for the baseline's
+  retriever. At $k{=}50$, BM25 alone is best on Task~3 (97.1\%): multi-hop questions name later
+  hops by keyword more than by meaning.
+\item \textbf{Smaller shortlists still cost accuracy end to end.} Before the runner fixes,
+  going from 128 to 50 hybrid tools lost 3 Task~2 and 3 Task~3 items, in line with Task~3's
+  recall drop. We therefore keep $k{=}128$, where V2's end-to-end gain over the baseline
+  (+5 Task~2 items, +1 Task~3) is within noise.
+\item \textbf{Per-hop retrieval (V4) has nothing to gain.} We re-ranked the tools at each hop
+  using the question plus the previous hop's \emph{gold} call and response, an upper bound for a
+  live agent. It changes at most 1 of the 35 Task~3 items at any $k$. Of the 7 items that miss a
+  gold tool at $k{=}32$, 4 miss it at hop~1, which per-hop retrieval cannot change, and the
+  previous responses are mostly bare values (\texttt{[["USA"]]}) that say little about the next
+  tool. We did not build a live V4.
+\end{itemize}
+
+\section{Tasks 1--3: single-turn questions}
+
+\subsection*{Runner fixes}
+\textbf{Tool schema.} In Phase~1, 22.5\% of Task~2 and 17.1\% of Task~3 items ended with the API
+rejecting a tool call. For tools without parameters the official wrapper passes no schema, so
+LangChain infers one with a required internal \texttt{config} field, and Groq's strict
+validation rejects the model's correct call. With the fix, 18 of the 25 Task~2 items the bug had
+killed and all 3 Task~3 items are correct, and rejected calls fall to 1.7\% and 5.7\% of items.
+What remains are genuine model mistakes, such as a missing required argument, which V3 targets.
+
+\textbf{Stale tool list (Task~1).} Task~1's server switches between two tool sets when an item
+loads its data: generic operations (\texttt{filter\_data}, \texttt{sort\_data}, \ldots) or
+item-specific ones (\texttt{select\_data\_equal\_to}, \ldots). The official runner lists the
+tools once per domain and never again, so on items of the other kind every call returns
+``Unknown tool'' and the agent loops until a limit. This affects 48 of our 60 Task~1 items, and
+600 of the 2,085 items in the official test mapping. Re-listing the tools before each item
+removes every ``Unknown tool'' call and makes Task~1 scorable at all (0.483).
+
+\subsection*{V5: answers grounded in the evidence}
+After the fixes, 12.7\% of all items (35 of 275) had the right answer or the right tool responses
+and failed only the groundedness judge. Reading all 35 by hand gave two main causes. In 13, the
+model adds something the tools never returned: units (``200\,cc''), interpretations of codes,
+world knowledge (``the Ford Torino is American''), or framing such as ``the only''. In 12, the
+answer restates a filter that lives in the tool call's arguments (``these are the US models''),
+which the judge cannot see: it is given the query and the tool responses, not the calls. The
+second cause is a limit of the evaluator and affects every system.
+
+V5 adds one LLM call that rewrites the final answer using only values present in the tool
+results, copied verbatim, and says the information is not available only when no tool result
+supports the draft. Offline, on the 35 items plus 35 correct control items, it recovered 10 of
+the 25 ungrounded items in Tasks~2--4, none of which pass when their original answers are simply
+re-scored, with no net loss on the controls. In the full run Task~2 rose from 0.558 to 0.583 and
+Task~1 from 0.450 to 0.583. Part of Task~1's gain is likely judge noise: 5 of its 10 ungrounded
+items pass on a re-score alone.
+
+\subsection*{V7 and V8: making the agent use its tools}
+After V5, 18 of 120 Task~2 and 10 of 35 Task~3 items were answered without any tool call, and
+none of them correctly. The model decided that no tool fits, and in 13 of the 28 cases asked the
+user to clarify, although the benchmark has no user. The official runner gives the agent no
+system message in Tasks~2--3. V7 adds one, passed as LangGraph's \texttt{prompt} so that it is
+not recorded in the trajectory: try the tools before answering, related tools too; never ask
+back, take the most reasonable reading; say an answer is not available only when the tool
+results do not contain it. Items with no tool call fall from 28 to 3 and ask-backs from 13 to 0.
+Task~2 rises from 0.583 to 0.633 and Task~3 is unchanged. Most of the former no-tool items still
+fail, now by calling the wrong tool: the rule removes a refusal but does not find the right tool.
+
+A first error analysis on the V7 run (the method of Section~8) showed two further patterns. In 5 items the agent called the
+right tool with the right value in the wrong case (\texttt{venue='steamship'}, gold
+\texttt{'STEAMSHIP'}); the data is case-sensitive, the lookup returned 0, and the agent reported
+that. In 7 of 12 Task~3 wrong-tool failures, the chain stopped after the first hop. V8 adds two
+sentences to V7's rule: retry an empty or zero lookup in other capitalizations, and keep calling
+tools until every part of the question is answered. It fixed the 3 Task~3 items where it applied:
+the agent retried \texttt{"ford torino"} in lowercase, found the country and finished the chain.
+It fixed none of the 4 Task~2 items, where the agent either accepted the 0 or retried other
+spellings in the same case. Task~2 rose from 0.633 to 0.650, within noise.
+
+\textbf{V3: repairing rejected tool calls.} After the schema fix, 6 items in the V5 runs still end
+with the API rejecting a call (invalid JSON or a missing required argument). V3 catches the
+rejection at the LLM call, shows the model the error and its rejected call, and retries once; the
+note is not kept in the history. It was tested offline against a LangGraph agent with a fake LLM
+and is scored only in the final run. There Groq rejected 4 calls, a missing required argument
+or a tool not in the list, and the retry was valid 3 times; once the model repeated the same
+wrong argument name. Items ending on a rejected call fell from 5 in the last runs of Table~3
+(2, 1 and 2 on Tasks~1--3) to 1. Which items draw a rejection varies between runs, so this is
+a small effect, but no repaired item crashed.
+
+\section{Task 4: multi-turn dialogues under tool policies}
+
+\textbf{Long histories.} The official runner puts every earlier turn's gold answer into the
+history in full. In 10 of the 60 dialogues an earlier answer is a whole table, 1.3M to 9.4M
+characters, and the first LLM call is rejected before any tool is called. Our fix keeps each
+earlier answer over 2,000 characters to its first rows plus a note such as ``(61223 rows in
+total; only the first 75 are shown)''. The largest history shrinks from about 2.3M tokens to
+1.6k, and queries, turn order and policies are unchanged. Live, 6 of the 10 dialogues become
+correct and the other 50 change by +1 net, i.e.\ noise: Task~4 rises from 0.317 to 0.433.
+
+\textbf{Tool policies (V6).} Each dialogue may carry a policy restricting the use of document
+retrievers (the \texttt{query\_*} tools). The official agent only states it to the model, and
+for single-turn dialogues not at all; in the V5 run it followed none of them. In the 898
+training dialogues every policy is one of 4 templates over 12 topics, and the gold answer is the
+refusal ``I can not answer.'' \emph{exactly} when only retrievers are allowed and the policy
+applies: in 65 of 65 global policies and 68 of 68 topic policies naming the domain's topic, and
+in none of the 79 naming another topic. V6 enforces this: when only retrievers are allowed and
+the policy applies, it refuses with no tool call; when retrievers are forbidden, the agent runs
+without them. For domains outside our training split, the domain's topic comes from one LLM
+call per domain, which agrees with the benchmark on 25 of 29 labelled training domains. Live,
+V6 refused exactly the 11 dialogues whose gold is a refusal and nothing else, against 0
+deliberate refusals by the baseline. Task~4 rises from 0.433 to 0.500; the 4 losses are on
+dialogues the guard did not touch. On the official test set the guard should matter more:
+IBM's policy judge, which is not public, scores a turn 0 when a policy is broken.
+
+\section{Error analysis}
+We analyse the 116 failed items of the final run in two passes. First, every failed item gets one
+category automatically. The first split is the evaluator's own exact-match verdict: if every gold
+tool response is among the agent's, the tool part was right and the answer failed; otherwise the
+reason comes from comparing the agent's calls with the gold calls (Table~5). Second, we read a
+sample of 76 failed items in full (20 per task, all 16 for Task~3, drawn in proportion to the
+categories) and gave each one root cause (Table~6).
+
+\begin{center}\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Category & Task 1 & Task 2 & Task 3 & Task 4 \\
+\midrule
+Agent crash                                         & 4 & 1 & 1 & 1 \\
+Right answer, not grounded                          & 6 & 2 & 2 & 1 \\
+Right tool results, answer not grounded             & 1 & 10 & 0 & 2 \\
+Tool results missing: no tool call                  & 1 & 1 & 0 & 2 \\
+Tool results missing: different tool                & 13 & \textbf{21} & \textbf{11} & \textbf{14} \\
+Tool results missing: argument differs only in case & 0 & 3 & 0 & 0 \\
+Tool results missing: other argument value          & 5 & 7 & 2 & 5 \\
+\midrule
+Failed / items                                      & 30 / 60 & 45 / 120 & 16 / 35 & 25 / 60 \\
+\bottomrule
+\end{tabular}\\[0.2em]
+{\footnotesize \textbf{Table 5.} All failed items of the final run by automatic category. No failed
+item is ``right tool results, wrong answer''.}
+\end{center}
+
+\begin{center}\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Root cause (hand-read) & Task 1 & Task 2 & Task 3 & Task 4 & All \\
+\midrule
+Wrong tool or wrong decomposition                         & 1 & 6 & 5 & 3 & 15 \\
+Wrong argument value (case, format, flag, threshold)      & 0 & 4 & 2 & 3 & 9 \\
+Gave up or stopped the chain early                        & 1 & 0 & 2 & 2 & 5 \\
+No tool call / documents instead of the data tool          & 1 & 1 & 0 & 2+3 & 7 \\
+Answer rendering (list cut or deduplicated, name for code) & 5 & 0 & 0 & 1 & 6 \\
+Answer adds or contradicts the tool results               & 1 & 1 & 1 & 1 & 4 \\
+Agent crash                                               & 3 & 1 & 1 & 1 & 6 \\
+\midrule
+Gold questionable or question ambiguous                   & 3 & 5 & 4 & 3 & 15 \\
+Judge error; answer supported by the tool results         & 5 & 2 & 1 & 1 & 9 \\
+\midrule
+Sampled                                                   & 20 & 20 & 16 & 20 & 76 \\
+\bottomrule
+\end{tabular}\\[0.2em]
+{\footnotesize \textbf{Table 6.} Root causes in a sample of 76 failed items. The last two rows are
+not clearly the agent's fault.}
+\end{center}
+
+\begin{itemize}
+\item \textbf{Choosing the tool is the main agent failure.} ``Different tool'' is 47--69\% of
+  failures in Tasks~2--4, although the gold tool is in the shortlist (Section~5). In Task~2 the
+  model picks a plausible neighbour; in Tasks~2 and~4 it rebuilds a composite gold tool from
+  simpler ones and loses the gold response; in Task~3 the first hop is often already wrong; in
+  Task~4, 3 sampled dialogues search the documents 6--18 times with near-identical queries and
+  never try the data tool.
+\item \textbf{A third of the ``different tool'' failures have a questionable gold} (13 of 38
+  sampled). The gold's second call ignores what the first found, a gold argument contradicts the
+  question (\texttt{get\_city\_count\_by\_name("PHL")} $=0$ for ``How many cities are in the
+  Philippines?''; position \texttt{"D"}, defence, for ``which goalie''), or the gold answers another
+  quantity (25 rows for ``how many times was the Ford Maverick introduced'', where the agent counts
+  5 model years). Over all categories it is 15 of 76. These items cap every system's score; we
+  leave them in.
+\item \textbf{Arguments} (9 of 76): case (\texttt{'steamship'} for \texttt{'STEAMSHIP'}), format
+  (\texttt{'peace corps'} for \texttt{'peace\_corps'}), swapped years, ``more than 5'' passed as 6,
+  and boolean flags whose meaning the tool name hides. V8's case retry works when the agent uses it
+  (Example~2), but not reliably.
+\item \textbf{Groundedness} is 21\% of failures (24 of 116), and in the sample about half of it is
+  the judge (7 of 15): it sees only the first 3 values of a data handle, or misreads a long list.
+  The other half are real: an added unit, or a fact from world knowledge in place of a skipped hop.
+\item \textbf{Task~1 fails mostly on the final answer}: 5 of 20 sampled items render it unlike the
+  gold (a country name for a code, a deduplicated list) and 5 are judge errors.
+\item \textbf{Crashes are rare} (7 of 116): 5 requests or contexts too large for the API, one
+  iteration limit, and one rejected call that V3's retry repeated.
+\end{itemize}
+
+\textbf{Examples.} (1)~\emph{Plausible neighbour, Task~2.} ``How many shoutouts are there in the
+regular season of 1977?'' The agent calls \texttt{get\_sum\_sho\_by\_year(1977)}, gets 0 and answers
+0; the gold is \texttt{get\_count\_combined\_shutouts\_\allowbreak by\_year\_and\_role(1977, "R")} $=2$.
+(2)~\emph{Chain stops, Task~3.} ``Among the car models introduced in 1970, how many have the same
+origin country as the Ford Torino produced in 1970?'' The country lookup for \texttt{"Ford Torino"}
+returns nothing; following V8 the agent retries \texttt{"ford torino"} and gets USA, then answers that the count ``isn't retrievable'' instead of calling the gold's count tool for
+USA and 1970 ($=45$). (3)~\emph{Questionable
+gold, Task~3.} ``Among the authors of the paper published in 2003 by [an affiliation], how many are
+affiliated with Cairo Microsoft Innovation Lab?'' The agent finds the paper, asks for its authors
+with that affiliation, gets none and answers 0; the gold's second call asks about
+``University of Tokyo'' and expects 1.
+
+\section{Limitations and future work}
+\begin{itemize}
+\item \textbf{Small samples and run-to-run noise.} With 35--120 items per task and about 10\% of
+  items flipping between identical runs, most single changes are within their 95\% intervals.
+  Our evidence for each change is item-level: what happened to the items it targets.
+\item \textbf{Held-out training domains, not the test set.} Access to the official test set is
+  still pending. Our 9 held-out domains mimic unseen domains, but the test set also has newly
+  curated items.
+\item \textbf{One model.} Every run uses \texttt{gpt-oss-120b} on Groq, also as the judge. We did
+  not test whether the changes transfer to other models.
+\item \textbf{Gold quality.} In our sample, 15 of 76 failed items have a questionable gold call or
+  answer (Section~8). We report scores as the official evaluator gives them.
+\item \textbf{The evaluator's judges.} The groundedness judge cannot see tool arguments, which caps
+  every system's score, and Task~1's groundedness verdicts are unstable on re-scoring. Task~4's
+  policy judge is not public, so policy compliance is only measured indirectly.
+\item \textbf{No control over the agent loop.} Because every change is a patch on the official
+  agent, ideas that need a different loop, such as planning or verifying a chain before
+  answering, were out of scope.
+\item \textbf{Future work.} The largest failure, choosing the wrong tool from a correct
+  shortlist, needs a stronger selection step: re-ranking the shortlist with the LLM, or few-shot
+  examples of similar questions and their gold tools from the training split. Case-sensitive
+  lookups are better fixed in the tool layer than by prompting. Tool responses too large for the
+  API could be truncated like the long histories. The official test set and the SemEval-2027
+  evaluation are next.
+\end{itemize}
+
+\section{Reproducibility}
+Code: \url{https://github.com/Anurag-1205/VAKRA-Advanced}. Setup and commands are in the README; every run writes its
+configuration, git commit and upstream commit to \texttt{runs/<run id>/config.json}. The final
+run is
+\begin{center}\small
+\texttt{python scripts/run\_baseline.py -{}-split dev-eval -{}-caps 2 3 4 -{}-retriever hybrid
+-{}-fix-tool-schema}\\
+\texttt{-{}-repair-tool-calls -{}-refresh-tools -{}-evidence-answer -{}-short-history -{}-policy-guard
+-{}-tools-first}\\
+\texttt{-{}-tool-hints -{}-llm-max-retries 8}
+\end{center}
+and the same with \texttt{-{}-caps 1 -{}-max-iterations 25} for Task~1 (an iteration limit as a cost
+guard; the official runner sets none), each followed by \texttt{python scripts/evaluate.py -{}-run-id <run id>}.
+\texttt{scripts/run\_final.sh} runs and scores both (about 70 minutes and \$1.50). Our final runs, at commit
+\texttt{4431acb}, are
+\begin{center}\small
+\texttt{20261112-1833-v2hybridfixv3rtv5shv6v7v8-groq-dev-eval-cap234} (Tasks~2--4)\\
+\texttt{20261112-1833-v2hybridfixv3rtv5shv6v7v8-maxit25-groq-dev-eval-cap1} (Task~1).
+\end{center}
+The
+ablation rows of Table~3 come from the runs listed in \texttt{results/v2\_and\_fixes\_dev\_eval.md}.
+
+\textbf{Contributions.} All three authors contributed equally. Anurag Kaushal: the tool-schema fix,
+the tool-call repair (V3), the reproducibility check and the submission. Aayush Pandey: tool
+retrieval (V2, V4, retriever ablations), the Task~1 tool refresh, answer grounding and tool use in
+Tasks~1--3 (V5, V7, V8), and the final runs. Piyush Agarwal: Task~4 (long-history fix, policy
+guard V6), the diagnostics tooling and the error analysis.
+
+\end{document}

@@ -43,8 +43,8 @@ Ground rules:
 | 14 | Thu–Fri | ✅ *(all sections drafted by Aayush, Nov 12; final-run numbers in)* **Report sections drafted:** method and system *(Anurag)*, tool retrieval and Tasks 2–3 *(Aayush)*, Task 4 *(Piyush)*, error analysis *(Aayush, with #13)* | All | – | Draft in `report/` |
 | 15 | Fri Nov 13 | ✅ **Final runs**: the best configuration on all tasks. Done early, Thu Nov 12 (`scripts/run_final.sh`): Task 1 0.500, Task 2 0.625, Task 3 0.543, Task 4 0.583, macro 0.563 ([results](results/v2_and_fixes_dev_eval.md), "Final run") | Aayush (runs), all | 1–12 | All final runs scored |
 | 16 | **Fri Nov 13** | **Code freeze** (end of day) | All | 15 | – |
-| 17 | Sat Nov 14 | **Final report**: results table, ablation table, error analysis, limitations | All | 15 | Report complete |
-| 18 | Sat Nov 14 | **Reproducibility check**: every number in the report links to its run id; README steps work | Aayush + Anurag | 17 | Checked |
+| 17 | Sat Nov 14 | ✅ *(Nov 14: cut to the 2-page limit in `report/final_report.tex`; the 6-page draft stays as `report/final_report_full.tex`)* **Final report**: results table, ablation table, error analysis, limitations | All | 15 | Report complete |
+| 18 | Sat Nov 14 | ✅ *(Nov 14: [results/reproducibility_check.md](results/reproducibility_check.md); all 24 scores recomputed from runs/, offline numbers re-run, fresh clone + README install work; one report claim corrected)* **Reproducibility check**: every number in the report links to its run id; README steps work | Aayush + Anurag | 17 | Checked |
 | 19 | **Sun Nov 15** | **Submit** | Anurag | 17, 18 | Submitted |
 
 **Status 2026-11-12:** ✅ = done. Results for #1, #2, #3 and #5 are in

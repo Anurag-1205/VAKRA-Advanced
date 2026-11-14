@@ -57,7 +57,8 @@ Everything is scored on `dev-eval` (held-out training domains; the official test
 - **Results:** [results/](results/), starting with
   [v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md) (all scores, Findings 1–7) and
   [error_analysis.md](results/error_analysis.md).
-- **Report:** [report/final_report.tex](report/final_report.tex) (draft); midterm report in
+- **Report:** [report/final_report.tex](report/final_report.tex) (final, 2 pages; the longer
+  draft with more detail is [report/final_report_full.tex](report/final_report_full.tex)). Midterm report in
   [report/Phase_1_report.pdf](report/Phase_1_report.pdf).
 - **Task list:** [POST_MID_WORK.md](POST_MID_WORK.md). Phase 0 setup notes:
   [results/phase0.md](results/phase0.md).

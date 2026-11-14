@@ -43,6 +43,8 @@ Run ids:
 - V2 hybrid 128 / 50, Caps 2–3: `20261109-2225-v2hybrid-groq-dev-eval`, `20261109-2225-v2hybridk50-groq-dev-eval`
 - V2 + both fixes, Caps 2–4: `20261109-2356-v2hybridfixrt-groq-dev-eval`
 - V2 + both fixes, Cap 1 (max 25 iterations): `20261109-2356-v2hybridfixrt-maxit25-groq-dev-eval-cap1`
+- + V5, Caps 2–4: `20261110-1559-v2hybridfixrtv5-groq-dev-eval`; Cap 1 (max 25 iterations):
+  `20261110-1559-v2hybridfixrtv5-maxit25-groq-dev-eval-cap1`
 - + V5 + short history, Cap 4: `20261110-2302-v2hybridfixrtv5sh-groq-dev-eval-cap4`
 - + V5 + short history + V6, Cap 4: `20261111-1610-v2hybridfixrtv5shv6-groq-dev-eval-cap4`
 - + V5 + V7, Caps 2–3: `20261112-1144-v2hybridfixrtv5v7-groq-dev-eval-cap23`
