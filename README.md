@@ -16,11 +16,14 @@ All of this runs against IBM's executable VAKRA environment: 8,000+ locally host
 
 ## Team
 
-| Member | Proposed focus (see [PLAN.md](PLAN.md)) |
+All three authors contributed equally. Contributions as stated in the final report
+([report/final_report.pdf](report/final_report.pdf)):
+
+| Member | Contribution |
 |---|---|
-| Anurag Kaushal | Agent core: runner, executor, state store; Capability 1 (API chaining) |
-| Aayush Pandey | Tool retrieval and selection; Capabilities 2 and 3 |
-| Piyush Agarwal | Document retrieval, policy handling; Capability 4; evaluation and error analysis |
+| Anurag Kaushal | The tool-schema fix, the Task 1 tool refresh, answer grounding (V5), the tool-call repair (V3) and the reproducibility check |
+| Aayush Pandey | Tool retrieval (V2, V4, retriever ablations), tool use in Tasks 2–3 (V7, V8), and the final runs |
+| Piyush Agarwal | Task 4 (long-history fix, policy guard V6), the diagnostics tooling and the error analysis |
 
 ## The task in one table
 

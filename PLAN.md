@@ -27,8 +27,9 @@ hard deadline of **2026-11-15** for all course deliverables (v0.1 of 2026-10-26 
 
 ## 2. Workstreams and owners
 
-Owners are a proposal; swap freely. Each workstream has one owner and one reviewer, and every PR
-needs a review from someone other than its author.
+The table below is the original proposal (2026-10-26). Each workstream had one owner and one
+reviewer, and every PR needed a review from someone other than its author. The final split of
+the work is in [Final contributions](#final-contributions), as stated in the final report.
 
 | Workstream | Owner | Reviewer | Covers |
 |---|---|---|---|
@@ -36,6 +37,17 @@ needs a review from someone other than its author.
 | **B. Tool retrieval and selection** | Aayush Pandey | Piyush Agarwal | Tool indexing (BM25, dense, hybrid, rerank, doc expansion); retrieval metrics; planner / plan-then-act; Caps 2 and 3 |
 | **C. Multi-source, policy and evaluation** | Piyush Agarwal | Anurag Kaushal | Splits; evaluation harness and diagnostics; document retrieval; policy guard and abstention; Cap 4; error taxonomy |
 | **Shared** | All | — | Answer synthesizer, experiment runs, report writing |
+
+### Final contributions
+
+As stated in the final report ([report/final_report.pdf](report/final_report.pdf)). All three
+authors contributed equally.
+
+| Member | Contribution |
+|---|---|
+| **Anurag Kaushal** | The tool-schema fix, the Task 1 tool refresh, answer grounding (V5), the tool-call repair (V3) and the reproducibility check |
+| **Aayush Pandey** | Tool retrieval (V2, V4, retriever ablations), tool use in Tasks 2–3 (V7, V8), and the final runs |
+| **Piyush Agarwal** | Task 4 (long-history fix, policy guard V6), the diagnostics tooling and the error analysis |
 
 ## 3. Timeline
 
@@ -93,29 +105,32 @@ costs about one day of quota. Development iterates on `smoke`.
 
 **Stage 2: Build (Mon Nov 2 – Sun Nov 8)**
 
-- [ ] **A:** own runner and agent with the same output format as upstream (V1 parity check);
-  trace logging; executor with schema validation and argument repair (V3).
-- [ ] **B:** BM25, dense and hybrid (RRF) retrieval; pick k from the Recall@k curve (V2).
-  Plan-then-act with state-store slots for Cap 3 (V4).
-- [ ] **C:** `diagnostics.py` on top of traces. If Cap 4 is in scope: document retrieval,
-  policy guard and abstention (V6).
+- [x] **A (Anurag):** the tool-schema fix, the Task 1 tool refresh, the tool-call repair (V3)
+  and answer grounding (V5), each as a run-time patch on the official runner. *(The own runner,
+  V1, was dropped on 2026-11-10: the patches made it unnecessary.)*
+- [x] **B (Aayush):** BM25, dense and hybrid (RRF) retrieval (V2), keeping k = 128; per-hop
+  retrieval for Cap 3 (V4), checked offline and dropped; tool use in Caps 2–3 (V7, V8).
+- [x] **C (Piyush):** `diagnostics.py` over the runs' output files and logs; the Cap 4
+  long-history fix; policy guard and abstention (V6).
 
 **Stage 3: Experiments and analysis (Mon Nov 9 – Fri Nov 13)**
 
-- [ ] **All:** V1–V4 (and V6 if in scope) on `dev-eval`, one variant per day of quota.
-- [ ] **B:** retriever ablations (offline, no LLM cost).
-- [ ] **C:** error taxonomy over failed items, about 20 per capability, with representative
-  success and failure traces.
-- [ ] **Fri Nov 13 (end of day):** code freeze, moved from Thu Nov 12 on 2026-11-09. No new
+- [x] **All:** V2–V8 on `dev-eval`; **Aayush:** the final runs. *(Results:
+  [results/v2_and_fixes_dev_eval.md](results/v2_and_fixes_dev_eval.md).)*
+- [x] **B (Aayush):** retriever ablations (offline, no LLM cost).
+- [x] **C (Piyush):** error analysis over failed items, with representative failure traces.
+  *(See [results/error_analysis.md](results/error_analysis.md).)*
+- [x] **Fri Nov 13 (end of day):** code freeze, moved from Thu Nov 12 on 2026-11-09. No new
   features after this. A bug fix that changes a reported number is allowed, and the affected run
   is redone.
 
 **Stage 4: Report and submission (Sat Nov 14 – Sun Nov 15)**
 
-- [ ] **All:** results table, ablation table, error analysis and limitations written up. The
+- [x] **All:** results table, ablation table, error analysis and limitations written up. The
   report skeleton (design and method sections) should be drafted from Nov 9, in parallel with
   Stage 3.
-- [ ] **All:** README reproducibility pass; every reported number links to a `run_id`.
+- [x] **Anurag:** reproducibility check; every reported number links to a `run_id`. *(See
+  [results/reproducibility_check.md](results/reproducibility_check.md).)*
 - [ ] **Sun Nov 15:** submit.
 
 ### Original schedule (v0.1, superseded)

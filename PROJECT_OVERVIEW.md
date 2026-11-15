@@ -177,12 +177,12 @@ ordered by expected gain per hour. The full ordered task list, with owners and d
 
 | Priority | Variant | What it does | Failure it targets | Owner |
 |---|---|---|---|---|
-| 1 | **V1** | Our own runner, same output format as IBM's. Fix the `config` schema bug, and catch Groq's rejection instead of crashing. Must first match V0 within noise. | ~20% of Cap 2–3 items lost to the schema bug | Anurag |
+| 1 | **V1** | Our own runner, same output format as IBM's. Fix the `config` schema bug, and catch Groq's rejection instead of crashing. Must first match V0 within noise. | ~20% of Cap 2–3 items lost to the schema bug | Anurag (dropped Nov 10) |
 | 2 | **V2** | Hybrid (BM25 + dense) tool shortlist, with k chosen from the recall curve | Cap 3 shortlist misses; fewer tokens per call | Aayush |
 | 3 | **V3** | Check each tool call against its schema and repair bad arguments | Remaining invalid calls | Anurag |
 | 4 | **V4** | Plan-then-act: retrieve tools again for each hop | Cap 3 hops the question doesn't name | Aayush |
 | 5 | **V6** | Cap 4: shorten long answers in the dialogue history; a policy guard that refuses on purpose | 17% too-long dialogues; up to 18% refusal dialogues | Piyush |
-| 6 | V5 *(if time)* | Answer only from collected tool evidence | Groundedness failures (9–17%) | Shared |
+| 6 | V5 *(if time)* | Answer only from collected tool evidence | Groundedness failures (9–17%) | Anurag |
 
 ### 3.3 Experiments and analysis
 

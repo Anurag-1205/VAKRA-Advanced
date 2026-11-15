@@ -8,7 +8,7 @@ patched in at run time by `scripts/run_baseline.py`; upstream's code is unmodifi
 |---|---|---|
 | `--retriever hybrid` | **V2:** BM25 + MiniLM fusion (RRF) for the tool shortlist ([retrieval.py](../scripts/retrieval.py)) | Aayush |
 | `--fix-tool-schema` | **Schema fix:** zero-parameter tools get an empty schema instead of LangChain's inferred `args`/`config`/`kwargs`, which Groq rejected (HTTP 400) | Anurag |
-| `--refresh-tools` | **Tool refresh:** re-lists tools after Cap 1's per-item universe switch (see below) | Aayush |
+| `--refresh-tools` | **Tool refresh:** re-lists tools after Cap 1's per-item universe switch (see below) | Anurag |
 
 ## Scores
 
